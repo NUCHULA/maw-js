@@ -202,6 +202,8 @@ function selectWindow(target, name) {
   document.querySelectorAll('.window').forEach(e => e.classList.toggle('selected', e.dataset.target === target));
   if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'subscribe', target }));
   el('term').focus();
+  // Persist selection in URL hash
+  location.hash = encodeURIComponent(target);
 }
 
 // Keyboard → tmux
@@ -251,8 +253,12 @@ function showToast(msg, error = false) {
   setTimeout(() => t.className = 'toast', 1500);
 }
 
+// Restore selection from URL hash
+if (location.hash) {
+  const saved = decodeURIComponent(location.hash.slice(1));
+  if (saved) { selectedTarget = saved; }
+}
 connect();
-// Auto-focus
 setTimeout(() => el('term').focus(), 100);
 </script>
 </body>
