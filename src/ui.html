@@ -46,7 +46,7 @@
   .term-output {
     flex: 1; padding: 8px 12px; overflow-y: auto;
     background: #0a0a0f; font-size: 13px; line-height: 1.45;
-    white-space: pre-wrap; word-break: break-all; color: #aaa;
+    white-space: pre-wrap; word-break: break-all; color: #aaa; line-height: 1.35;
   }
   .term-output .placeholder { color: #333; text-align: center; margin-top: 30vh; font-size: 14px; }
 
@@ -128,7 +128,7 @@ function ansi(text) {
       else if (c>=100&&c<=107) bg=AC[c-92];
     }
     const st=[];
-    if (fg) st.push('color:'+fg); if (bg) st.push('background:'+bg);
+    if (fg) st.push('color:'+fg); if (bg) st.push('background:'+bg+';display:inline;padding:1px 0;box-decoration-break:clone;-webkit-box-decoration-break:clone');
     if (b) st.push('font-weight:bold'); if (d) st.push('opacity:0.6');
     if (i) st.push('font-style:italic');
     if (u||s) st.push('text-decoration:'+(u?'underline':'')+(u&&s?' ':'')+(s?'line-through':''));
