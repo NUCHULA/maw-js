@@ -67,6 +67,15 @@ export async function selectWindow(target: string, host?: string): Promise<void>
 }
 
 export async function sendKeys(target: string, text: string, host?: string): Promise<void> {
-  const escaped = text.replace(/'/g, "'\\''");
-  await ssh(`tmux send-keys -t '${target}' -- '${escaped}' Enter`, host);
+  if (text.startsWith("/")) {
+    // Slash commands: send char by char for interactive tools (Claude Code, etc.)
+    for (const ch of text) {
+      const escaped = ch === "'" ? "\"'\"" : `'${ch}'`;
+      await ssh(`tmux send-keys -t '${target}' -l ${escaped}`, host);
+    }
+    await ssh(`tmux send-keys -t '${target}' Enter`, host);
+  } else {
+    const escaped = text.replace(/'/g, "'\\''");
+    await ssh(`tmux send-keys -t '${target}' -- '${escaped}' Enter`, host);
+  }
 }
