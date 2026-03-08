@@ -168,7 +168,7 @@ export function TerminalModal({ agent, send, onClose, onNavigate, onSelectSiblin
         {/* Terminal output */}
         <div
           ref={termRef}
-          className="flex-1 px-4 py-3 overflow-y-auto font-mono text-[13px] leading-[1.35] text-[#aaa] whitespace-pre-wrap break-all bg-[#0a0a0f] saturate-[0.55] brightness-[1.15] contrast-[0.95]"
+          className="flex-1 px-4 py-3 overflow-y-auto font-mono text-[13px] leading-[1.35] text-[#cdd6f4] whitespace-pre-wrap break-all bg-[#0a0a0f]"
           dangerouslySetInnerHTML={{ __html: ansiToHtml(trimCapture(content)) }}
         />
 
