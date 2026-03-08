@@ -19,7 +19,7 @@ export const MissionControl = memo(function MissionControl({
   onSelectAgent,
 }: MissionControlProps) {
   const [hoveredAgent, setHoveredAgent] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState(1.1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const panStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
@@ -60,7 +60,7 @@ export const MissionControl = memo(function MissionControl({
 
   const onMouseUp = useCallback(() => setIsPanning(false), []);
 
-  const resetView = useCallback(() => { setZoom(1); setPan({ x: 0, y: 0 }); }, []);
+  const resetView = useCallback(() => { setZoom(1.1); setPan({ x: 0, y: 0 }); }, []);
 
   // Group agents by session
   const sessionAgents = useMemo(() => {
