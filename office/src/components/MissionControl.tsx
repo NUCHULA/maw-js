@@ -1,5 +1,6 @@
 import { memo, useMemo, useState, useCallback, useRef, useEffect } from "react";
 import { AgentAvatar } from "./AgentAvatar";
+import { HoverPreviewCard } from "./HoverPreviewCard";
 import { roomStyle } from "../lib/constants";
 import type { AgentState, Session } from "../lib/types";
 
@@ -19,11 +20,78 @@ export const MissionControl = memo(function MissionControl({
   onSelectAgent,
 }: MissionControlProps) {
   const [hoveredAgent, setHoveredAgent] = useState<string | null>(null);
+  const [hoverPreview, setHoverPreview] = useState<{ agent: AgentState; room: { label: string; accent: string }; pos: { x: number; y: number } } | null>(null);
+  const hoverTimeout = useRef<ReturnType<typeof setTimeout>>();
+
+  // Auto-popup cards for Saiyan agents — max 3 visible, 2s stagger, FIFO
+  type SaiyanCard = { agent: AgentState; room: { label: string; accent: string }; svgX: number; svgY: number; order: number };
+  const [saiyanCards, setSaiyanCards] = useState<Map<string, SaiyanCard>>(new Map());
+  const saiyanQueue = useRef<string[]>([]); // pending targets waiting to appear
+  const saiyanStaggerTimer = useRef<ReturnType<typeof setTimeout>>();
+  const saiyanDismissTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const saiyanOrderCounter = useRef(0);
+  const prevSaiyanTargets = useRef<Set<string>>(new Set());
+
   const [zoom, setZoom] = useState(1.1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const panStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  // Convert SVG coordinates to screen-relative position
+  const svgToScreen = useCallback((svgX: number, svgY: number): { x: number; y: number } => {
+    const svg = svgRef.current;
+    const container = containerRef.current;
+    if (!svg || !container) return { x: 0, y: 0 };
+    const pt = svg.createSVGPoint();
+    pt.x = svgX;
+    pt.y = svgY;
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return { x: 0, y: 0 };
+    const screenPt = pt.matrixTransform(ctm);
+    const containerRect = container.getBoundingClientRect();
+    return {
+      x: screenPt.x - containerRect.left,
+      y: screenPt.y - containerRect.top,
+    };
+  }, []);
+
+  // side: "right" (default/hover), "left", or "auto" (prefer right, fallback left)
+  const calcCardPos = useCallback((svgX: number, svgY: number, side: "left" | "right" | "auto" = "auto") => {
+    const containerRect = containerRef.current?.getBoundingClientRect();
+    if (!containerRect) return { x: 0, y: 0 };
+    const screen = svgToScreen(svgX, svgY);
+    const cardW = 420;
+    const cardH = 500;
+    const rightX = screen.x + 60;
+    const leftX = screen.x - cardW - 40;
+    let x: number;
+    if (side === "right") {
+      x = rightX + cardW > containerRect.width ? leftX : rightX;
+    } else if (side === "left") {
+      x = leftX < 0 ? rightX : leftX;
+    } else {
+      x = rightX + cardW > containerRect.width ? leftX : rightX;
+    }
+    const y = Math.max(10, Math.min(screen.y - 290, containerRect.height - cardH - 20));
+    return { x, y };
+  }, [svgToScreen]);
+
+  // Show preview card on hover — anchored to agent's SVG position
+  const showPreview = useCallback((agent: AgentState, room: { label: string; accent: string }, svgX: number, svgY: number) => {
+    clearTimeout(hoverTimeout.current);
+    const pos = calcCardPos(svgX, svgY);
+    setHoverPreview({ agent, room, pos });
+  }, [calcCardPos]);
+
+  const hidePreview = useCallback(() => {
+    hoverTimeout.current = setTimeout(() => setHoverPreview(null), 300);
+  }, []);
+
+  const keepPreview = useCallback(() => {
+    clearTimeout(hoverTimeout.current);
+  }, []);
 
   const busyCount = agents.filter((a) => a.status === "busy").length;
   const readyCount = agents.filter((a) => a.status === "ready").length;
@@ -99,6 +167,109 @@ export const MissionControl = memo(function MissionControl({
     [onSelectAgent]
   );
 
+  // Build lookup: agent target -> { svgX, svgY, room style }
+  const agentPositions = useMemo(() => {
+    const map = new Map<string, { svgX: number; svgY: number; style: ReturnType<typeof roomStyle> }>();
+    for (const s of layout) {
+      const count = s.agents.length;
+      s.agents.forEach((agent, ai) => {
+        const angle = (ai / Math.max(1, count)) * Math.PI * 2 - Math.PI / 2;
+        const r = count === 1 ? 0 : Math.min(Math.max(70, 35 + count * 18) - 35, 35 + count * 6);
+        map.set(agent.target, {
+          svgX: s.x + Math.cos(angle) * r,
+          svgY: s.y + Math.sin(angle) * r,
+          style: s.style,
+        });
+      });
+    }
+    return map;
+  }, [layout]);
+
+  // Process queue: show next card from queue (max 3 visible, 2s stagger)
+  const processQueue = useCallback(() => {
+    clearTimeout(saiyanStaggerTimer.current);
+    const showNext = () => {
+      if (saiyanQueue.current.length === 0) return;
+      const target = saiyanQueue.current.shift()!;
+      const agent = agents.find(a => a.target === target);
+      const pos = agentPositions.get(target);
+      if (!agent || !pos) { showNext(); return; } // skip invalid, try next
+
+      saiyanOrderCounter.current++;
+      const card: SaiyanCard = {
+        agent,
+        room: { label: pos.style.label, accent: pos.style.accent },
+        svgX: pos.svgX,
+        svgY: pos.svgY,
+        order: saiyanOrderCounter.current,
+      };
+
+      setSaiyanCards(prev => {
+        const next = new Map(prev);
+        // If already at 3, remove the oldest (lowest order)
+        if (next.size >= 3) {
+          let oldestKey = "";
+          let oldestOrder = Infinity;
+          for (const [k, v] of next) {
+            if (v.order < oldestOrder) { oldestOrder = v.order; oldestKey = k; }
+          }
+          if (oldestKey) {
+            next.delete(oldestKey);
+            clearTimeout(saiyanDismissTimers.current[oldestKey]);
+          }
+        }
+        next.set(target, card);
+        return next;
+      });
+
+      // Auto-dismiss after 10s
+      clearTimeout(saiyanDismissTimers.current[target]);
+      saiyanDismissTimers.current[target] = setTimeout(() => {
+        setSaiyanCards(prev => {
+          const next = new Map(prev);
+          next.delete(target);
+          return next;
+        });
+      }, 10000);
+
+      // Schedule next card with 2s stagger
+      if (saiyanQueue.current.length > 0) {
+        saiyanStaggerTimer.current = setTimeout(showNext, 2000);
+      }
+    };
+    showNext();
+  }, [agents, agentPositions]);
+
+  // Watch saiyanTargets — queue new ones, remove departed
+  useEffect(() => {
+    const prev = prevSaiyanTargets.current;
+    const newTargets = [...saiyanTargets].filter(t => !prev.has(t));
+
+    if (newTargets.length > 0) {
+      const wasEmpty = saiyanQueue.current.length === 0;
+      saiyanQueue.current.push(...newTargets);
+      // Start processing if queue was empty (otherwise already running)
+      if (wasEmpty) processQueue();
+    }
+
+    // Remove cards for agents that lost Saiyan
+    const removed = [...prev].filter(t => !saiyanTargets.has(t));
+    if (removed.length > 0) {
+      // Also remove from queue
+      saiyanQueue.current = saiyanQueue.current.filter(t => !removed.includes(t));
+      setSaiyanCards(prev => {
+        const next = new Map(prev);
+        for (const t of removed) {
+          next.delete(t);
+          clearTimeout(saiyanDismissTimers.current[t]);
+        }
+        return next;
+      });
+    }
+
+    prevSaiyanTargets.current = new Set(saiyanTargets);
+  }, [saiyanTargets, processQueue]);
+
   // Compute viewBox based on zoom and pan
   const vbW = 1200 / zoom;
   const vbH = 1000 / zoom;
@@ -117,6 +288,7 @@ export const MissionControl = memo(function MissionControl({
     >
       {/* SVG Mission Control */}
       <svg
+        ref={svgRef}
         viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`}
         className="w-full h-full"
         preserveAspectRatio="xMidYMid meet"
@@ -229,8 +401,14 @@ export const MissionControl = memo(function MissionControl({
                     )}
                     <g
                       transform={`scale(${scale})`}
-                      onMouseEnter={() => setHoveredAgent(agent.target)}
-                      onMouseLeave={() => setHoveredAgent(null)}
+                      onMouseEnter={() => {
+                        setHoveredAgent(agent.target);
+                        showPreview(agent, { label: s.style.label, accent: s.style.accent }, ax, ay);
+                      }}
+                      onMouseLeave={() => {
+                        setHoveredAgent(null);
+                        hidePreview();
+                      }}
                       style={{ transition: "transform 0.15s ease-out" }}
                     >
                       <AgentAvatar
@@ -257,8 +435,8 @@ export const MissionControl = memo(function MissionControl({
                       {agent.name.replace(/-oracle$/, "").replace(/-/g, " ")}
                     </text>
 
-                    {/* Hover tooltip */}
-                    {isHovered && (
+                    {/* Hover tooltip — hidden when preview card is showing */}
+                    {isHovered && !hoverPreview && (
                       <g>
                         <rect x={-100} y={-65} width={200} height={34} rx={8}
                           fill="rgba(8,8,16,0.95)" stroke={s.style.accent} strokeWidth={0.8} opacity={0.95} />
@@ -293,6 +471,72 @@ export const MissionControl = memo(function MissionControl({
         <button onClick={() => setZoom((z) => Math.max(0.5, z - 0.05))}
           className="w-8 h-8 rounded-lg bg-black/50 backdrop-blur border border-white/10 text-white/70 hover:text-white hover:bg-white/10 text-lg font-bold cursor-pointer">−</button>
       </div>
+
+      {/* Saiyan auto-popup cards — prefer right, left only at edge */}
+      {[...saiyanCards.entries()].map(([target, card]) => {
+        const pos = calcCardPos(card.svgX, card.svgY);
+        // Don't show if hover preview is for the same agent
+        if (hoverPreview?.agent.target === target) return null;
+        return (
+          <div
+            key={`saiyan-${target}`}
+            className="absolute z-20 pointer-events-auto"
+            style={{
+              left: pos.x,
+              top: pos.y,
+              maxWidth: 420,
+              animation: "fadeSlideIn 0.2s ease-out",
+            }}
+            onClick={() => {
+              // Dismiss on click
+              setSaiyanCards(prev => {
+                const next = new Map(prev);
+                next.delete(target);
+                return next;
+              });
+            }}
+          >
+            {/* Saiyan order badge */}
+            <div
+              className="absolute -top-3 -left-3 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold z-10 border-2"
+              style={{
+                background: card.room.accent,
+                borderColor: "#0a0a0f",
+                color: "#0a0a0f",
+                boxShadow: `0 0 12px ${card.room.accent}`,
+              }}
+            >
+              {card.order}
+            </div>
+            <HoverPreviewCard
+              agent={card.agent}
+              roomLabel={card.room.label}
+              accent={card.room.accent}
+            />
+          </div>
+        );
+      })}
+
+      {/* Hover Preview Card — manual hover */}
+      {hoverPreview && (
+        <div
+          className="absolute z-30 pointer-events-auto"
+          style={{
+            left: hoverPreview.pos.x,
+            top: hoverPreview.pos.y,
+            maxWidth: 420,
+            animation: "fadeSlideIn 0.15s ease-out",
+          }}
+          onMouseEnter={keepPreview}
+          onMouseLeave={hidePreview}
+        >
+          <HoverPreviewCard
+            agent={hoverPreview.agent}
+            roomLabel={hoverPreview.room.label}
+            accent={hoverPreview.room.accent}
+          />
+        </div>
+      )}
 
       {/* Bottom stats */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-6 px-6 py-2 rounded-xl bg-black/40 backdrop-blur border border-white/[0.04]">
