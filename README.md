@@ -2,6 +2,8 @@
 
 > Multi-Agent Workflow — remote tmux orchestra control via SSH
 
+**[Join Nat Weerawan's Subscribers Group!](https://www.facebook.com/groups/1461988771737551)** | [Watch the Demo](https://www.facebook.com/reel/1513957190087776)
+
 ## Quick Start (no install)
 
 ```bash
