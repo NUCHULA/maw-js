@@ -44,6 +44,20 @@ app.get("/office/*", serveStatic({
   rewriteRequestPath: (p) => p.replace(/^\/office/, "/dist-office"),
 }));
 
+// Serve 8-bit office (Bevy WASM)
+app.get("/office-8bit", serveStatic({ root: "./dist-8bit-office", path: "/index.html" }));
+app.get("/office-8bit/*", serveStatic({
+  root: "./",
+  rewriteRequestPath: (p) => p.replace(/^\/office-8bit/, "/dist-8bit-office"),
+}));
+
+// Serve War Room (Bevy WASM)
+app.get("/war-room", serveStatic({ root: "./dist-war-room", path: "/index.html" }));
+app.get("/war-room/*", serveStatic({
+  root: "./",
+  rewriteRequestPath: (p) => p.replace(/^\/war-room/, "/dist-war-room"),
+}));
+
 // Oracle v2 proxy — search, stats
 const ORACLE_URL = process.env.ORACLE_URL || "http://localhost:47779";
 
