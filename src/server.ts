@@ -65,6 +65,13 @@ app.get("/race-track/*", serveStatic({
   rewriteRequestPath: (p) => p.replace(/^\/race-track/, "/dist-race-track"),
 }));
 
+// Serve Superman Universe (Bevy WASM)
+app.get("/superman", serveStatic({ root: "./dist-superman", path: "/index.html" }));
+app.get("/superman/*", serveStatic({
+  root: "./",
+  rewriteRequestPath: (p) => p.replace(/^\/superman/, "/dist-superman"),
+}));
+
 // Oracle v2 proxy — search, stats
 const ORACLE_URL = process.env.ORACLE_URL || "http://localhost:47779";
 
