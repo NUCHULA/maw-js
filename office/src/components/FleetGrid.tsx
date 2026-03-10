@@ -101,20 +101,15 @@ export const FleetGrid = memo(function FleetGrid({
     setInputBufs(prev => ({ ...prev, [target]: val }));
   }, []);
 
-  /** Convert row element position to absolute coords — card overlaps right side of row */
-  const rowToAbsPos = useCallback((rowEl: HTMLElement) => {
-    const container = containerRef.current;
-    if (!container) return { x: 0, y: 0 };
-    const containerRect = container.getBoundingClientRect();
+  /** Get viewport-relative position for hover card — right-aligned with row, Y at row */
+  const rowToViewportPos = useCallback((rowEl: HTMLElement) => {
     const rowRect = rowEl.getBoundingClientRect();
     const cardW = 420;
-    // Align card's right edge with row's right edge (overlap on the right side of the row)
-    const rowRight = rowRect.right - containerRect.left;
-    let x = rowRight - cardW;
-    // Clamp: don't go off left edge
+    // Right edge of card = right edge of row
+    let x = rowRect.right - cardW;
     if (x < 8) x = 8;
-    // Y: aligned with row top, accounting for scroll
-    const y = rowRect.top - containerRect.top + container.scrollTop;
+    // Y: row top (viewport coords)
+    const y = rowRect.top;
     return { x, y };
   }, []);
 
@@ -122,9 +117,9 @@ export const FleetGrid = memo(function FleetGrid({
   const showPreview = useCallback((agent: AgentState, accent: string, label: string, rowEl: HTMLElement) => {
     if (pinnedPreview) return;
     clearTimeout(hoverTimeout.current);
-    const pos = rowToAbsPos(rowEl);
+    const pos = rowToViewportPos(rowEl);
     setHoverPreview({ agent, accent, label, pos });
-  }, [rowToAbsPos, pinnedPreview]);
+  }, [rowToViewportPos, pinnedPreview]);
 
   const hidePreview = useCallback(() => {
     hoverTimeout.current = setTimeout(() => setHoverPreview(null), 300);
@@ -137,25 +132,20 @@ export const FleetGrid = memo(function FleetGrid({
   // Click agent row → pin preview card
   const onAgentClick = useCallback((agent: AgentState, accent: string, label: string, rowEl: HTMLElement) => {
     if (pinnedPreview) return;
-    const pos = rowToAbsPos(rowEl);
+    const pos = rowToViewportPos(rowEl);
     setPinnedPreview({ agent, accent, label, pos });
     setHoverPreview(null);
     send({ type: "subscribe", target: agent.target });
-  }, [pinnedPreview, send, rowToAbsPos]);
+  }, [pinnedPreview, send, rowToViewportPos]);
 
-  // Animate pinned card: start at hover viewport pos, slide to viewport center
+  // Animate pinned card: start at row viewport pos, slide to viewport center
   useEffect(() => {
     if (pinnedPreview) {
-      // Convert absolute container pos → viewport pos for initial frame
-      const container = containerRef.current;
-      const containerRect = container?.getBoundingClientRect();
-      const startLeft = (containerRect?.left || 0) + pinnedPreview.pos.x;
-      const startTop = pinnedPreview.pos.y - (container?.scrollTop || 0) + (containerRect?.top || 0);
-      setPinnedAnimPos({ left: startLeft, top: startTop });
+      // Start at hover position (already viewport coords)
+      setPinnedAnimPos({ left: pinnedPreview.pos.x, top: pinnedPreview.pos.y });
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          const vw = window.innerWidth;
-          setPinnedAnimPos({ left: (vw - 420) / 2, top: 80 });
+          setPinnedAnimPos({ left: (window.innerWidth - 420) / 2, top: 80 });
         });
       });
     } else {
@@ -442,10 +432,10 @@ export const FleetGrid = memo(function FleetGrid({
 
       <BottomStats agents={agents} eventLog={eventLog} />
 
-      {/* Hover Preview Card — appears near row on hover (hidden when pinned) */}
+      {/* Hover Preview Card — fixed near row on hover (hidden when pinned) */}
       {hoverPreview && !pinnedPreview && (
         <div
-          className="absolute z-30 pointer-events-auto"
+          className="fixed z-30 pointer-events-auto"
           style={{
             left: hoverPreview.pos.x,
             top: hoverPreview.pos.y,
