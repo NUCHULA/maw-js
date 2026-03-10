@@ -4,8 +4,11 @@ import type { Session } from "./ssh";
 export interface OverviewTarget {
   session: string;
   window: number;
+  windowName: string;
   oracle: string;
 }
+
+export const PANES_PER_PAGE = 4;
 
 export function buildTargets(sessions: Session[], filters: string[]): OverviewTarget[] {
   let targets = sessions
@@ -13,7 +16,7 @@ export function buildTargets(sessions: Session[], filters: string[]): OverviewTa
     .map(s => {
       const active = s.windows.find(w => w.active) || s.windows[0];
       const oracleName = s.name.replace(/^\d+-/, "");
-      return { session: s.name, window: active?.index ?? 1, oracle: oracleName };
+      return { session: s.name, window: active?.index ?? 1, windowName: active?.name ?? oracleName, oracle: oracleName };
     });
 
   if (filters.length) {
@@ -23,14 +26,25 @@ export function buildTargets(sessions: Session[], filters: string[]): OverviewTa
   return targets;
 }
 
+export function paneTitle(t: OverviewTarget): string {
+  return `${t.oracle} (${t.session}:${t.window})`;
+}
+
 export function mirrorCmd(t: OverviewTarget): string {
-  const target = `${t.session}:${t.window}`;
-  const label = `${t.oracle} (${target})`;
-  return `while true; do clear; printf '\\033[1;36m── ${label} ──\\033[0m\\n'; maw peek ${t.oracle} 2>/dev/null || echo '(offline)'; sleep 0.5; done`;
+  return `watch --color -t -n2 'maw peek ${t.windowName} 2>/dev/null || echo "(offline)"'`;
 }
 
 export function pickLayout(count: number): string {
-  return count <= 3 ? "even-horizontal" : "tiled";
+  if (count <= 2) return "even-horizontal";
+  return "tiled";  // 2×2 grid
+}
+
+export function chunkTargets(targets: OverviewTarget[]): OverviewTarget[][] {
+  const pages: OverviewTarget[][] = [];
+  for (let i = 0; i < targets.length; i += PANES_PER_PAGE) {
+    pages.push(targets.slice(i, i + PANES_PER_PAGE));
+  }
+  return pages;
 }
 
 export async function cmdOverview(filterArgs: string[]) {
@@ -47,24 +61,52 @@ export async function cmdOverview(filterArgs: string[]) {
 
   if (!targets.length) { console.error("no oracle sessions found"); return; }
 
-  // Create overview session (first pane)
-  await ssh("tmux new-session -d -s 0-overview -n war-room");
+  const pages = chunkTargets(targets);
 
-  // First pane already exists
-  await ssh(`tmux send-keys -t 0-overview:war-room "${mirrorCmd(targets[0]).replace(/"/g, '\\"')}" Enter`);
+  // Create overview session with first window
+  await ssh("tmux new-session -d -s 0-overview -n page-1");
 
-  // Split for remaining targets
-  for (let i = 1; i < targets.length; i++) {
-    await ssh("tmux split-window -t 0-overview:war-room");
-    await ssh(`tmux send-keys -t 0-overview:war-room "${mirrorCmd(targets[i]).replace(/"/g, '\\"')}" Enter`);
-    await ssh("tmux select-layout -t 0-overview:war-room tiled");
+  // Enable pane border titles
+  await ssh("tmux set -t 0-overview pane-border-status top");
+  await ssh('tmux set -t 0-overview pane-border-format " #{pane_title} "');
+  await ssh("tmux set -t 0-overview pane-border-style fg=colour240");
+  await ssh("tmux set -t 0-overview pane-active-border-style fg=colour45");
+
+  for (let p = 0; p < pages.length; p++) {
+    const page = pages[p];
+    const winName = `page-${p + 1}`;
+
+    // First page uses the already-created window
+    if (p > 0) {
+      await ssh(`tmux new-window -t 0-overview -n ${winName}`);
+    }
+
+    // First pane — set title and start mirror
+    const pane0 = `0-overview:${winName}.0`;
+    await ssh(`tmux select-pane -t ${pane0} -T '${paneTitle(page[0])}'`);
+    await ssh(`tmux send-keys -t ${pane0} "${mirrorCmd(page[0]).replace(/"/g, '\\"')}" Enter`);
+
+    // Split for remaining targets in this page
+    for (let i = 1; i < page.length; i++) {
+      await ssh(`tmux split-window -t 0-overview:${winName}`);
+      const paneId = `0-overview:${winName}.${i}`;
+      await ssh(`tmux select-pane -t ${paneId} -T '${paneTitle(page[i])}'`);
+      await ssh(`tmux send-keys -t ${paneId} "${mirrorCmd(page[i]).replace(/"/g, '\\"')}" Enter`);
+      await ssh(`tmux select-layout -t 0-overview:${winName} tiled`);
+    }
+
+    // Final layout for this page
+    const layout = pickLayout(page.length);
+    await ssh(`tmux select-layout -t 0-overview:${winName} ${layout}`);
   }
 
-  // Final layout
-  const layout = pickLayout(targets.length);
-  await ssh(`tmux select-layout -t 0-overview:war-room ${layout}`);
+  // Go back to first window
+  await ssh("tmux select-window -t 0-overview:page-1");
 
-  console.log(`\x1b[32m✅\x1b[0m overview: ${targets.length} oracles`);
-  for (const t of targets) console.log(`  ${t.oracle} → ${t.session}:${t.window}`);
+  console.log(`\x1b[32m✅\x1b[0m overview: ${targets.length} oracles across ${pages.length} page${pages.length > 1 ? 's' : ''}`);
+  for (let p = 0; p < pages.length; p++) {
+    console.log(`  page-${p + 1}: ${pages[p].map(t => t.oracle).join(', ')}`);
+  }
   console.log(`\n  attach: tmux attach -t 0-overview`);
+  if (pages.length > 1) console.log(`  navigate: Ctrl-b n/p (next/prev page)`);
 }

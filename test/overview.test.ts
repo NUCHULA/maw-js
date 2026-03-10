@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { buildTargets, mirrorCmd, pickLayout } from "../src/overview";
+import { buildTargets, mirrorCmd, paneTitle, pickLayout, chunkTargets, PANES_PER_PAGE } from "../src/overview";
 import type { Session } from "../src/ssh";
 
 const MOCK_SESSIONS: Session[] = [
@@ -48,10 +48,12 @@ describe("buildTargets", () => {
     expect(targets.find(t => t.session === "scratch")).toBeUndefined();
   });
 
-  test("picks active window index", () => {
+  test("picks active window index and name", () => {
     const targets = buildTargets(MOCK_SESSIONS, []);
     expect(targets.find(t => t.oracle === "neo")!.window).toBe(1);
+    expect(targets.find(t => t.oracle === "neo")!.windowName).toBe("claude");
     expect(targets.find(t => t.oracle === "hermes")!.window).toBe(2);
+    expect(targets.find(t => t.oracle === "hermes")!.windowName).toBe("shell");
   });
 
   test("strips number prefix for oracle name", () => {
@@ -112,35 +114,72 @@ describe("buildTargets", () => {
   });
 });
 
+describe("paneTitle", () => {
+  test("formats oracle name and target", () => {
+    const title = paneTitle({ session: "1-neo", window: 1, windowName: "neo-oracle", oracle: "neo" });
+    expect(title).toBe("neo (1-neo:1)");
+  });
+});
+
 describe("mirrorCmd", () => {
-  test("includes oracle name and target in label", () => {
-    const cmd = mirrorCmd({ session: "1-neo", window: 1, oracle: "neo" });
-    expect(cmd).toContain("neo (1-neo:1)");
+  test("uses watch --color for flicker-free ANSI display", () => {
+    const cmd = mirrorCmd({ session: "2-hermes", window: 2, windowName: "hermes-oracle", oracle: "hermes" });
+    expect(cmd).toContain("watch --color -t -n2");
+    expect(cmd).toContain("maw peek hermes-oracle");
   });
 
-  test("calls maw peek with oracle name", () => {
-    const cmd = mirrorCmd({ session: "2-hermes", window: 2, oracle: "hermes" });
-    expect(cmd).toContain("maw peek hermes");
-  });
-
-  test("is a while-true loop with sleep", () => {
-    const cmd = mirrorCmd({ session: "1-neo", window: 1, oracle: "neo" });
-    expect(cmd).toMatch(/^while true;/);
-    expect(cmd).toContain("sleep 0.5");
+  test("does not echo input (watch handles this)", () => {
+    const cmd = mirrorCmd({ session: "1-neo", window: 1, windowName: "neo-oracle", oracle: "neo" });
+    expect(cmd).toMatch(/^watch /);
   });
 });
 
 describe("pickLayout", () => {
-  test("uses even-horizontal for 1-3 targets", () => {
+  test("uses even-horizontal for 1-2 targets", () => {
     expect(pickLayout(1)).toBe("even-horizontal");
     expect(pickLayout(2)).toBe("even-horizontal");
-    expect(pickLayout(3)).toBe("even-horizontal");
   });
 
-  test("uses tiled for 4+ targets", () => {
+  test("uses tiled for 3+ targets", () => {
+    expect(pickLayout(3)).toBe("tiled");
     expect(pickLayout(4)).toBe("tiled");
-    expect(pickLayout(5)).toBe("tiled");
-    expect(pickLayout(10)).toBe("tiled");
+  });
+});
+
+describe("chunkTargets", () => {
+  test("returns single page when under limit", () => {
+    const targets = buildTargets(MOCK_SESSIONS, []);
+    const pages = chunkTargets(targets);
+    expect(pages).toHaveLength(1);
+    expect(pages[0]).toHaveLength(3);
+  });
+
+  test("splits into multiple pages at PANES_PER_PAGE", () => {
+    const sessions: Session[] = Array.from({ length: 8 }, (_, i) => ({
+      name: `${i + 1}-oracle${i}`,
+      windows: [{ index: 1, name: `win${i}`, active: true }],
+    }));
+    const targets = buildTargets(sessions, []);
+    const pages = chunkTargets(targets);
+    expect(pages).toHaveLength(2);
+    expect(pages[0]).toHaveLength(PANES_PER_PAGE);
+    expect(pages[1]).toHaveLength(8 - PANES_PER_PAGE);
+  });
+
+  test("handles exact multiple of page size", () => {
+    const sessions: Session[] = Array.from({ length: PANES_PER_PAGE }, (_, i) => ({
+      name: `${i + 1}-oracle${i}`,
+      windows: [{ index: 1, name: `win${i}`, active: true }],
+    }));
+    const targets = buildTargets(sessions, []);
+    const pages = chunkTargets(targets);
+    expect(pages).toHaveLength(1);
+    expect(pages[0]).toHaveLength(PANES_PER_PAGE);
+  });
+
+  test("handles empty targets", () => {
+    const pages = chunkTargets([]);
+    expect(pages).toHaveLength(0);
   });
 });
 
