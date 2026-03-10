@@ -88,10 +88,18 @@ export const FleetGrid = memo(function FleetGrid({
   const observe = useVisibleTargets(send);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // --- Hover preview (near mouse, non-pinned) ---
+  // --- All state declarations first (avoid TDZ issues) ---
   type PreviewInfo = { agent: AgentState; accent: string; label: string; pos: { x: number; y: number } };
   const [hoverPreview, setHoverPreview] = useState<PreviewInfo | null>(null);
   const hoverTimeout = useRef<ReturnType<typeof setTimeout>>();
+  const [pinnedPreview, setPinnedPreview] = useState<PreviewInfo | null>(null);
+  const [pinnedAnimPos, setPinnedAnimPos] = useState<{ left: number; top: number } | null>(null);
+  const pinnedRef = useRef<HTMLDivElement>(null);
+  const [inputBufs, setInputBufs] = useState<Record<string, string>>({});
+  const getInputBuf = useCallback((target: string) => inputBufs[target] || "", [inputBufs]);
+  const setInputBuf = useCallback((target: string, val: string) => {
+    setInputBufs(prev => ({ ...prev, [target]: val }));
+  }, []);
 
   /** Convert row element position to absolute coords within the scrollable container */
   const rowToAbsPos = useCallback((rowEl: HTMLElement) => {
@@ -100,18 +108,15 @@ export const FleetGrid = memo(function FleetGrid({
     const containerRect = container.getBoundingClientRect();
     const rowRect = rowEl.getBoundingClientRect();
     const cardW = 420;
-    // Try right of content area, fallback to overlay on right side
-    const contentRight = containerRect.left + containerRect.width;
     let x = rowRect.right - containerRect.left + 16;
-    // If card would go off viewport right, position it overlapping content on the right
     if (containerRect.left + x + cardW > window.innerWidth) {
       x = window.innerWidth - containerRect.left - cardW - 16;
     }
-    // Y = row position + scroll offset (absolute within scrollable container)
     const y = rowRect.top - containerRect.top + container.scrollTop;
     return { x: Math.max(8, x), y: Math.max(8, y) };
   }, []);
 
+  // --- Hover callbacks ---
   const showPreview = useCallback((agent: AgentState, accent: string, label: string, rowEl: HTMLElement) => {
     if (pinnedPreview) return;
     clearTimeout(hoverTimeout.current);
@@ -125,17 +130,6 @@ export const FleetGrid = memo(function FleetGrid({
 
   const keepPreview = useCallback(() => {
     clearTimeout(hoverTimeout.current);
-  }, []);
-
-  // --- Pinned preview (click → animate to center) ---
-  type PinnedInfo = PreviewInfo;
-  const [pinnedPreview, setPinnedPreview] = useState<PinnedInfo | null>(null);
-  const [pinnedAnimPos, setPinnedAnimPos] = useState<{ left: number; top: number } | null>(null);
-  const pinnedRef = useRef<HTMLDivElement>(null);
-  const [inputBufs, setInputBufs] = useState<Record<string, string>>({});
-  const getInputBuf = useCallback((target: string) => inputBufs[target] || "", [inputBufs]);
-  const setInputBuf = useCallback((target: string, val: string) => {
-    setInputBufs(prev => ({ ...prev, [target]: val }));
   }, []);
 
   // Click agent row → pin preview card
