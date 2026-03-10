@@ -124,10 +124,18 @@ async function cmdWake(oracle: string, opts: { task?: string; newWt?: string; pr
     windowName = `${oracle}-${match.name}`;
   }
 
-  // Check if window already exists → select it
+  // Check if window already exists
   try {
     const winList = await ssh(`tmux list-windows -t '${session}' -F '#{window_name}' 2>/dev/null`);
     if (winList.split("\n").some(w => w === windowName)) {
+      if (opts.prompt) {
+        // Window exists but we have a prompt → send claude -p
+        console.log(`\x1b[33m⚡\x1b[0m '${windowName}' exists, sending prompt`);
+        await ssh(`tmux select-window -t '${session}:${windowName}'`);
+        const escaped = opts.prompt.replace(/'/g, "'\\''");
+        await ssh(`tmux send-keys -t '${session}:${windowName}' "claude -p '${escaped}' --dangerously-skip-permissions" Enter`);
+        return `${session}:${windowName}`;
+      }
       console.log(`\x1b[33m⚡\x1b[0m '${windowName}' already running in ${session}`);
       await ssh(`tmux select-window -t '${session}:${windowName}'`);
       return `${session}:${windowName}`;
