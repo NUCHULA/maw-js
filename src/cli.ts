@@ -99,12 +99,25 @@ async function detectSession(oracle: string): Promise<string | null> {
 async function cmdWake(oracle: string, opts: { task?: string; newWt?: string; prompt?: string }): Promise<string> {
   const { repoPath, repoName, parentDir } = await resolveOracle(oracle);
 
-  // Detect or create tmux session
+  // Detect or create tmux session (spawn all worktrees if new)
   let session = await detectSession(oracle);
   if (!session) {
     session = SESSION_MAP[oracle] || oracle;
+    // Create session with main window
     await ssh(`tmux new-session -d -s '${session}' -n '${oracle}' -c '${repoPath}'`);
-    console.log(`\x1b[32m+\x1b[0m created session '${session}'`);
+    await new Promise(r => setTimeout(r, 300));
+    await ssh(`tmux send-keys -t '${session}:${oracle}' 'claude' Enter`);
+    console.log(`\x1b[32m+\x1b[0m created session '${session}' (main: ${oracle})`);
+
+    // Spawn all existing worktree windows
+    const allWt = await findWorktrees(parentDir, repoName);
+    for (const wt of allWt) {
+      const wtWindowName = `${oracle}-${wt.name.replace(/^\d+-/, "")}`;
+      await ssh(`tmux new-window -t '${session}' -n '${wtWindowName}' -c '${wt.path}'`);
+      await new Promise(r => setTimeout(r, 300));
+      await ssh(`tmux send-keys -t '${session}:${wtWindowName}' 'claude' Enter`);
+      console.log(`\x1b[32m+\x1b[0m window: ${wtWindowName}`);
+    }
   }
 
   let targetPath = repoPath;
