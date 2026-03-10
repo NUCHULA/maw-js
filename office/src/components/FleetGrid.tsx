@@ -105,12 +105,13 @@ export const FleetGrid = memo(function FleetGrid({
   const showPreview = useCallback((agent: AgentState, accent: string, label: string, e: React.MouseEvent) => {
     if (pinnedPreview) return;
     clearTimeout(hoverTimeout.current);
-    const rowRect = e.currentTarget.getBoundingClientRect();
     const cardW = 420;
-    // Right-aligned with row
-    let x = rowRect.right - cardW;
+    // X: right of mouse cursor with small gap
+    let x = e.clientX + 16;
+    // If card goes off right edge, flip to left of cursor
+    if (x + cardW > window.innerWidth - 8) x = e.clientX - cardW - 16;
     if (x < 8) x = 8;
-    // Y follows mouse cursor
+    // Y: at mouse cursor
     const y = e.clientY;
     setHoverPreview({ agent, accent, label, pos: { x, y } });
   }, [pinnedPreview]);
@@ -126,9 +127,9 @@ export const FleetGrid = memo(function FleetGrid({
   // Click agent row → pin preview card (start at mouse position)
   const onAgentClick = useCallback((agent: AgentState, accent: string, label: string, e: React.MouseEvent) => {
     if (pinnedPreview) return;
-    const rowRect = e.currentTarget.getBoundingClientRect();
     const cardW = 420;
-    let x = rowRect.right - cardW;
+    let x = e.clientX + 16;
+    if (x + cardW > window.innerWidth - 8) x = e.clientX - cardW - 16;
     if (x < 8) x = 8;
     const pos = { x, y: e.clientY };
     setPinnedPreview({ agent, accent, label, pos });
@@ -201,7 +202,7 @@ export const FleetGrid = memo(function FleetGrid({
         const style = roomStyle(s.name);
         const ra = sessionAgents.get(s.name) || [];
         const ba = ra.filter(a => a.status === "busy");
-        return { key: s.name, label: style.label, accent: style.accent, floor: style.floor, agents: ra, hasBusy: ba.length > 0, busyCount: ba.length };
+        return { key: s.name, label: s.name, accent: style.accent, floor: style.floor, agents: ra, hasBusy: ba.length > 0, busyCount: ba.length };
       });
     }
     const multi: VRoom[] = [];
@@ -213,7 +214,7 @@ export const FleetGrid = memo(function FleetGrid({
       if (ra.length <= 1) {
         soloAgents.push(...ra);
       } else {
-        multi.push({ key: s.name, label: style.label, accent: style.accent, floor: style.floor, agents: ra, hasBusy: ba.length > 0, busyCount: ba.length });
+        multi.push({ key: s.name, label: s.name, accent: style.accent, floor: style.floor, agents: ra, hasBusy: ba.length > 0, busyCount: ba.length });
       }
     }
     const result: VRoom[] = [];
