@@ -1,7 +1,7 @@
 import { memo, useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { AgentAvatar } from "./AgentAvatar";
 import { HoverPreviewCard } from "./HoverPreviewCard";
-import { roomStyle } from "../lib/constants";
+import { roomStyle, PREVIEW_CARD } from "../lib/constants";
 import { BottomStats } from "./BottomStats";
 import { useFps } from "./FpsCounter";
 import type { AgentState, Session, AgentEvent } from "../lib/types";
@@ -105,14 +105,14 @@ export const FleetGrid = memo(function FleetGrid({
   const showPreview = useCallback((agent: AgentState, accent: string, label: string, e: React.MouseEvent) => {
     if (pinnedPreview) return;
     clearTimeout(hoverTimeout.current);
-    const cardW = 420;
+    const cardW = PREVIEW_CARD.width;
     // X: right of mouse cursor with small gap
-    let x = e.clientX + 16;
+    let x = e.clientX + 8;
     // If card goes off right edge, flip to left of cursor
-    if (x + cardW > window.innerWidth - 8) x = e.clientX - cardW - 16;
+    if (x + cardW > window.innerWidth - 8) x = e.clientX - cardW - 8;
     if (x < 8) x = 8;
-    // Y: at mouse cursor
-    const y = e.clientY;
+    // Y: above mouse cursor
+    const y = e.clientY - 120;
     setHoverPreview({ agent, accent, label, pos: { x, y } });
   }, [pinnedPreview]);
 
@@ -127,9 +127,9 @@ export const FleetGrid = memo(function FleetGrid({
   // Click agent row → pin preview card (start at mouse position)
   const onAgentClick = useCallback((agent: AgentState, accent: string, label: string, e: React.MouseEvent) => {
     if (pinnedPreview) return;
-    const cardW = 420;
-    let x = e.clientX + 16;
-    if (x + cardW > window.innerWidth - 8) x = e.clientX - cardW - 16;
+    const cardW = PREVIEW_CARD.width;
+    let x = e.clientX + 8;
+    if (x + cardW > window.innerWidth - 8) x = e.clientX - cardW - 8;
     if (x < 8) x = 8;
     const pos = { x, y: e.clientY };
     setPinnedPreview({ agent, accent, label, pos });
@@ -144,7 +144,7 @@ export const FleetGrid = memo(function FleetGrid({
       setPinnedAnimPos({ left: pinnedPreview.pos.x, top: pinnedPreview.pos.y });
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          setPinnedAnimPos({ left: (window.innerWidth - 420) / 2, top: 80 });
+          setPinnedAnimPos({ left: (window.innerWidth - PREVIEW_CARD.width) / 2, top: 80 });
         });
       });
     } else {
@@ -335,18 +335,10 @@ export const FleetGrid = memo(function FleetGrid({
                     <div
                       key={agent.target}
                       ref={(el) => observe(el, agent.target)}
-                      className="flex items-center gap-5 px-6 py-3.5 cursor-pointer transition-all duration-150"
+                      className="flex items-center gap-5 px-6 py-3.5 transition-all duration-150"
                       style={{
                         borderBottom: !isLast ? `1px solid rgba(255,255,255,0.04)` : "none",
                         background: isBusy ? `${style.accent}06` : "transparent",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = `${style.accent}10`;
-                        showPreview(agent, style.accent, vr.label, e);
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = isBusy ? `${style.accent}06` : "transparent";
-                        hidePreview();
                       }}
                       onClick={(e) => onAgentClick(agent, style.accent, vr.label, e)}
                       role="button"
@@ -354,8 +346,13 @@ export const FleetGrid = memo(function FleetGrid({
                       aria-label={`${agent.name} - ${agent.status}`}
                       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); } }}
                     >
-                      {/* Avatar */}
-                      <div className="w-14 h-14 flex-shrink-0" style={{ overflow: "visible" }}>
+                      {/* Avatar — hover preview triggers here only */}
+                      <div
+                        className="w-14 h-14 flex-shrink-0 cursor-pointer"
+                        style={{ overflow: "visible" }}
+                        onMouseEnter={(e) => showPreview(agent, style.accent, vr.label, e)}
+                        onMouseLeave={() => hidePreview()}
+                      >
                         <svg viewBox="-40 -50 80 80" width={56} height={56} overflow="visible">
                           <AgentAvatar
                             name={agent.name}
@@ -438,7 +435,7 @@ export const FleetGrid = memo(function FleetGrid({
           style={{
             left: hoverPreview.pos.x,
             top: hoverPreview.pos.y,
-            maxWidth: 420,
+            maxWidth: PREVIEW_CARD.width,
             animation: "fadeSlideIn 0.15s ease-out",
           }}
           onMouseEnter={keepPreview}
@@ -460,7 +457,7 @@ export const FleetGrid = memo(function FleetGrid({
           style={{
             left: pinnedAnimPos.left,
             top: pinnedAnimPos.top,
-            maxWidth: 420,
+            maxWidth: PREVIEW_CARD.width,
             transition: "left 0.3s ease-out, top 0.3s ease-out",
           }}
         >

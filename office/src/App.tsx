@@ -7,7 +7,9 @@ import { RoomGrid } from "./components/RoomGrid";
 import { TerminalModal } from "./components/TerminalModal";
 import { MissionControl } from "./components/MissionControl";
 import { FleetGrid } from "./components/FleetGrid";
+import { OverviewGrid } from "./components/OverviewGrid";
 import { ShortcutOverlay } from "./components/ShortcutOverlay";
+import { JumpOverlay } from "./components/JumpOverlay";
 import { unlockAudio, isAudioUnlocked } from "./lib/sounds";
 import type { AgentState } from "./lib/types";
 
@@ -48,16 +50,28 @@ export function App() {
   const route = useHashRoute();
   const [selectedAgent, setSelectedAgent] = useState<AgentState | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showJump, setShowJump] = useState(false);
 
-  // "?" key opens shortcut overlay (only when no input is focused)
+  // "?" key opens shortcut overlay, "j" or Ctrl+K opens jump overlay
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "?" && !(e.target instanceof HTMLInputElement)) {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === "?" ) {
         setShowShortcuts(true);
+        return;
+      }
+      const isCtrlB = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b";
+      const isCtrlK = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k";
+      const isSlash = e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey;
+      const isJ = e.key.toLowerCase() === "j" && !e.ctrlKey && !e.metaKey && !e.altKey;
+      if (isCtrlB || isCtrlK || isSlash || isJ) {
+        e.preventDefault();
+        e.stopPropagation();
+        setShowJump(true);
       }
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
   }, []);
 
   const { sessions, agents, saiyanTargets, eventLog, addEvent, handleMessage } = useSessions();
@@ -82,6 +96,14 @@ export function App() {
     send({ type: "select", target: next.target });
   }, [selectedAgent, siblings, send]);
 
+  const jumpOverlay = showJump && (
+    <JumpOverlay
+      agents={agents}
+      onSelect={onSelectAgent}
+      onClose={() => setShowJump(false)}
+    />
+  );
+
   const terminalModal = selectedAgent && (
     <TerminalModal
       agent={selectedAgent}
@@ -92,6 +114,27 @@ export function App() {
       siblings={siblings}
     />
   );
+
+  if (route === "overview") {
+    return (
+      <div className="relative min-h-screen" style={{ background: "#020208" }}>
+        <div className="relative z-10">
+          <StatusBar connected={connected} agentCount={agents.length} sessionCount={sessions.length} activeView="overview" />
+        </div>
+        <OverviewGrid
+          sessions={sessions}
+          agents={agents}
+          saiyanTargets={saiyanTargets}
+          connected={connected}
+          send={send}
+          onSelectAgent={onSelectAgent}
+        />
+        {terminalModal}
+        {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
+        {jumpOverlay}
+      </div>
+    );
+  }
 
   if (route === "fleet") {
     return (
@@ -111,6 +154,7 @@ export function App() {
         />
         {terminalModal}
         {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
+        {jumpOverlay}
       </div>
     );
   }
@@ -133,6 +177,7 @@ export function App() {
         />
         {terminalModal}
         {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
+        {jumpOverlay}
       </div>
     );
   }

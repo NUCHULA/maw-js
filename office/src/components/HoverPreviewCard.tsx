@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, memo } from "react";
-import { ansiToHtml } from "../lib/ansi";
-import { agentColor } from "../lib/constants";
+import { ansiToHtml, processCapture } from "../lib/ansi";
+import { agentColor, PREVIEW_CARD } from "../lib/constants";
 import type { AgentState, AgentEvent } from "../lib/types";
 
 interface HoverPreviewCardProps {
@@ -29,15 +29,7 @@ const STATUS_LABELS: Record<string, string> = {
   idle: "IDLE",
 };
 
-function trimCapture(raw: string): string {
-  const lines = raw.split("\n");
-  while (lines.length > 0) {
-    const stripped = lines[lines.length - 1].replace(/\x1b\[[0-9;]*m/g, "").trim();
-    if (stripped === "") lines.pop();
-    else break;
-  }
-  return lines.join("\n");
-}
+// trimCapture replaced by shared processCapture from ansi.ts
 
 export const HoverPreviewCard = memo(function HoverPreviewCard({
   agent,
@@ -181,9 +173,9 @@ export const HoverPreviewCard = memo(function HoverPreviewCard({
       className="flex flex-col overflow-hidden rounded-xl border border-white/[0.08] shadow-2xl"
       style={{
         background: "#0a0a0f",
-        width: 420,
+        width: PREVIEW_CARD.width,
         height: "calc(100vh - 120px)",
-        maxHeight: 700,
+        maxHeight: PREVIEW_CARD.maxHeight,
       }}
       onMouseDown={(e) => {
         if (pinned && e.target !== inputRef.current) {
@@ -411,7 +403,7 @@ export const HoverPreviewCard = memo(function HoverPreviewCard({
         <div
           ref={termRef}
           className="absolute inset-0 px-3 py-2 overflow-y-auto overflow-x-hidden font-mono text-[10px] leading-[1.4] text-[#cdd6f4] whitespace-pre-wrap break-all"
-          dangerouslySetInnerHTML={{ __html: ansiToHtml(trimCapture(content)) }}
+          dangerouslySetInnerHTML={{ __html: ansiToHtml(processCapture(content)) }}
         />
         {pinned && send && (
           <div className="absolute bottom-3 right-3 flex flex-col gap-1 z-10">

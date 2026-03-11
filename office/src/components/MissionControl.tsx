@@ -6,7 +6,7 @@ import { OracleSearch } from "./OracleSearch";
 import { SaiyanToasts } from "./SaiyanToasts";
 import { BottomStats } from "./BottomStats";
 import { FpsCounter } from "./FpsCounter";
-import { roomStyle } from "../lib/constants";
+import { roomStyle, PREVIEW_CARD } from "../lib/constants";
 import type { AgentState, Session, AgentEvent } from "../lib/types";
 import type { SaiyanCard } from "./SaiyanToasts";
 
@@ -87,7 +87,7 @@ export const MissionControl = memo(function MissionControl({
     const containerRect = containerRef.current?.getBoundingClientRect();
     if (!containerRect) return { x: 0, y: 0 };
     const screen = svgToScreen(svgX, svgY);
-    const cardW = 420;
+    const cardW = PREVIEW_CARD.width;
     const cardH = 500;
     const rightX = screen.x + 60;
     const leftX = screen.x - cardW - 40;
@@ -240,7 +240,7 @@ export const MissionControl = memo(function MissionControl({
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           const containerW = containerRef.current?.getBoundingClientRect().width || 800;
-          setPinnedAnimPos({ left: (containerW - 420) / 2, top: 20 });
+          setPinnedAnimPos({ left: (containerW - PREVIEW_CARD.width) / 2, top: 20 });
         });
       });
     } else {
@@ -543,7 +543,7 @@ export const MissionControl = memo(function MissionControl({
           style={{
             left: hoverPreview.pos.x,
             top: hoverPreview.pos.y,
-            maxWidth: 420,
+            maxWidth: PREVIEW_CARD.width,
             animation: "fadeSlideIn 0.15s ease-out",
           }}
           onMouseEnter={keepPreview}
@@ -565,7 +565,7 @@ export const MissionControl = memo(function MissionControl({
           style={{
             left: pinnedAnimPos.left,
             top: pinnedAnimPos.top,
-            maxWidth: 420,
+            maxWidth: PREVIEW_CARD.width,
             transition: "left 0.3s ease-out, top 0.3s ease-out",
           }}
         >

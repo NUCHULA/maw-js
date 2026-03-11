@@ -61,3 +61,17 @@ export function ansiToHtml(text: string): string {
 export function stripAnsi(s: string): string {
   return s.replace(/\x1b\[[0-9;]*m/g, "");
 }
+
+/** Shorten long separator lines and trim trailing blanks (shared across all previews) */
+export function processCapture(raw: string): string {
+  // Shorten runs of box-drawing / dash chars to 3
+  const shortened = raw.replace(/[─━═—\-_▁▔]{6,}/g, "─".repeat(60));
+  const lines = shortened.split("\n");
+  // Trim trailing blank lines
+  while (lines.length > 0) {
+    const stripped = lines[lines.length - 1].replace(/\x1b\[[0-9;]*m/g, "").trim();
+    if (stripped === "") lines.pop();
+    else break;
+  }
+  return lines.join("\n");
+}

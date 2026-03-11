@@ -80,3 +80,9 @@ export const AVATAR = {
   strokeWidth: 3,
   nameLabelMaxChars: 12,
 } as const;
+
+// Preview card dimensions
+export const PREVIEW_CARD = {
+  width: 540,
+  maxHeight: 760,
+} as const;

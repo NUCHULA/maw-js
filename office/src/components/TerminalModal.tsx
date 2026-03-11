@@ -1,16 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { ansiToHtml } from "../lib/ansi";
+import { ansiToHtml, processCapture } from "../lib/ansi";
 import type { AgentState } from "../lib/types";
 
-function trimCapture(raw: string): string {
-  const lines = raw.split("\n");
-  while (lines.length > 0) {
-    const stripped = lines[lines.length - 1].replace(/\x1b\[[0-9;]*m/g, "").trim();
-    if (stripped === "") lines.pop();
-    else break;
-  }
-  return lines.join("\n");
-}
+// trimCapture replaced by shared processCapture from ansi.ts
 
 interface TerminalModalProps {
   agent: AgentState;
@@ -169,7 +161,7 @@ export function TerminalModal({ agent, send, onClose, onNavigate, onSelectSiblin
         <div
           ref={termRef}
           className="flex-1 px-4 py-3 overflow-y-auto font-mono text-[13px] leading-[1.35] text-[#cdd6f4] whitespace-pre-wrap break-all bg-[#0a0a0f]"
-          dangerouslySetInnerHTML={{ __html: ansiToHtml(trimCapture(content)) }}
+          dangerouslySetInnerHTML={{ __html: ansiToHtml(processCapture(content)) }}
         />
 
         {/* Input */}
