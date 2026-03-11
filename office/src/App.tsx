@@ -10,7 +10,8 @@ import { FleetGrid } from "./components/FleetGrid";
 import { OverviewGrid } from "./components/OverviewGrid";
 import { ShortcutOverlay } from "./components/ShortcutOverlay";
 import { JumpOverlay } from "./components/JumpOverlay";
-import { unlockAudio, isAudioUnlocked } from "./lib/sounds";
+import { unlockAudio, isAudioUnlocked, setSoundMuted } from "./lib/sounds";
+import { useFleetStore } from "./lib/store";
 import type { AgentState } from "./lib/types";
 
 function useHashRoute() {
@@ -75,6 +76,11 @@ export function App() {
   }, []);
 
   const { sessions, agents, saiyanTargets, eventLog, addEvent, handleMessage, feedActive } = useSessions();
+
+  // Sync muted state to sound module
+  const muted = useFleetStore((s) => s.muted);
+  const toggleMuted = useFleetStore((s) => s.toggleMuted);
+  useEffect(() => { setSoundMuted(muted); }, [muted]);
   const { connected, send } = useWebSocket(handleMessage);
 
   const onSelectAgent = useCallback((agent: AgentState) => {
@@ -119,7 +125,7 @@ export function App() {
     return (
       <div className="relative min-h-screen" style={{ background: "#020208" }}>
         <div className="relative z-10">
-          <StatusBar connected={connected} agentCount={agents.length} sessionCount={sessions.length} activeView="overview" onJump={() => setShowJump(true)} />
+          <StatusBar connected={connected} agentCount={agents.length} sessionCount={sessions.length} activeView="overview" onJump={() => setShowJump(true)} muted={muted} onToggleMute={toggleMuted} />
         </div>
         <OverviewGrid
           sessions={sessions}
@@ -141,7 +147,7 @@ export function App() {
     return (
       <div className="relative min-h-screen" style={{ background: "#020208" }}>
         <div className="relative z-10">
-          <StatusBar connected={connected} agentCount={agents.length} sessionCount={sessions.length} activeView="fleet" onJump={() => setShowJump(true)} />
+          <StatusBar connected={connected} agentCount={agents.length} sessionCount={sessions.length} activeView="fleet" onJump={() => setShowJump(true)} muted={muted} onToggleMute={toggleMuted} />
         </div>
         <FleetGrid
           sessions={sessions}
@@ -166,7 +172,7 @@ export function App() {
     return (
       <div className="relative min-h-screen" style={{ background: "#020208" }}>
         <div className="relative z-10">
-          <StatusBar connected={connected} agentCount={agents.length} sessionCount={sessions.length} activeView="mission" onJump={() => setShowJump(true)} />
+          <StatusBar connected={connected} agentCount={agents.length} sessionCount={sessions.length} activeView="mission" onJump={() => setShowJump(true)} muted={muted} onToggleMute={toggleMuted} />
         </div>
         <MissionControl
           sessions={sessions}
@@ -190,7 +196,7 @@ export function App() {
     <div className="relative min-h-screen">
       <UniverseBg />
       <div className="relative z-10">
-        <StatusBar connected={connected} agentCount={agents.length} sessionCount={sessions.length} activeView="office" onJump={() => setShowJump(true)} />
+        <StatusBar connected={connected} agentCount={agents.length} sessionCount={sessions.length} activeView="office" onJump={() => setShowJump(true)} muted={muted} onToggleMute={toggleMuted} />
         <RoomGrid sessions={sessions} agents={agents} saiyanTargets={saiyanTargets} onSelectAgent={onSelectAgent} />
       </div>
       {terminalModal}

@@ -4,7 +4,7 @@ import { stripAnsi } from "../lib/ansi";
 import { playSaiyanSound } from "../lib/sounds";
 import { agentSortKey } from "../lib/constants";
 import { useFleetStore } from "../lib/store";
-import { activeOracles, describeActivity, type FeedEvent } from "../lib/feed";
+import { activeOracles, describeActivity, type FeedEvent, type FeedEventType } from "../lib/feed";
 
 // Simple string hash
 function hash(s: string): number {
@@ -41,6 +41,38 @@ export function useSessions() {
 
   const markBusy = useFleetStore((s) => s.markBusy);
 
+  // Feed-triggered Saiyan: map oracle name → tmux target for burst animation
+  const agentsRef = useRef<AgentState[]>([]);
+  const SAIYAN_FEED_EVENTS = new Set<FeedEventType>(["PreToolUse", "UserPromptSubmit", "SubagentStart"]);
+  const SAIYAN_FEED_DURATION = 8000; // 8s burst from feed events
+
+  const triggerFeedSaiyan = useCallback((event: FeedEvent) => {
+    if (!SAIYAN_FEED_EVENTS.has(event.event)) return;
+    // Find agent by oracle name (agent.name minus "-oracle" suffix)
+    const agent = agentsRef.current.find(a => a.name.replace(/-oracle$/, "") === event.oracle);
+    if (!agent) return;
+    const target = agent.target;
+
+    // Trigger Saiyan burst (with sound throttle)
+    const now = Date.now();
+    if (now - lastSoundTime.current > 60000) {
+      lastSoundTime.current = now;
+      playSaiyanSound();
+    }
+    clearTimeout(saiyanTimers.current[target]);
+    setSaiyanTargets(prev => new Set(prev).add(target));
+    saiyanTimers.current[target] = setTimeout(() => {
+      setSaiyanTargets(prev => {
+        const next = new Set(prev);
+        next.delete(target);
+        return next;
+      });
+    }, SAIYAN_FEED_DURATION);
+
+    // Also mark as busy in recent store
+    markBusy([{ target, name: agent.name, session: agent.session }]);
+  }, [markBusy]);
+
   const handleMessage = useCallback((data: any) => {
     if (data.type === "sessions") {
       setSessions(data.sessions);
@@ -50,10 +82,13 @@ export function useSessions() {
       if (agents.length > 0) markBusy(agents);
     } else if (data.type === "feed") {
       // Single real-time feed event
+      const feedEvent = data.event as FeedEvent;
       setFeedEvents(prev => {
-        const next = [...prev, data.event as FeedEvent];
+        const next = [...prev, feedEvent];
         return next.length > MAX_FEED ? next.slice(-MAX_FEED) : next;
       });
+      // Trigger Saiyan burst from feed activity
+      triggerFeedSaiyan(feedEvent);
     } else if (data.type === "feed-history") {
       // Batch of recent events on connect
       setFeedEvents((data.events as FeedEvent[]).slice(-MAX_FEED));
@@ -200,6 +235,7 @@ export function useSessions() {
       })
     );
     list.sort((a, b) => agentSortKey(a.name) - agentSortKey(b.name));
+    agentsRef.current = list;
     return list;
   }, [sessions, captureData]);
 

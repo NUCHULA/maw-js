@@ -21,6 +21,8 @@ interface FleetStore {
   toggleGrouped: () => void;
   collapsed: string[];
   toggleCollapsed: (key: string) => void;
+  muted: boolean;
+  toggleMuted: () => void;
 }
 
 const RECENT_TTL = 30 * 60 * 1000; // 30 minutes
@@ -63,6 +65,8 @@ export const useFleetStore = create<FleetStore>()(
           ? s.collapsed.filter(k => k !== key)
           : [...s.collapsed, key],
       })),
+      muted: false,
+      toggleMuted: () => set((s) => ({ muted: !s.muted })),
     }),
     {
       name: "maw.fleet",
@@ -72,6 +76,7 @@ export const useFleetStore = create<FleetStore>()(
         sortMode: s.sortMode,
         grouped: s.grouped,
         collapsed: s.collapsed,
+        muted: s.muted,
       }),
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>;

@@ -526,6 +526,7 @@ export const HoverPreviewCard = memo(function HoverPreviewCard({
             { label: "y", text: "y\r", color: "#22C55E" },
             { label: "n", text: "n\r", color: "#ef5350" },
             { label: "↵", text: "\r", color: "#64748B" },
+            { label: "Tab", text: "\t", color: "#a78bfa" },
             { label: "/recap", text: "/recap\r", color: "#fbbf24" },
             { label: "/help", text: "/help\r", color: "#42a5f5" },
             { label: "Ctrl+C", text: "\x03", color: "#ef5350" },
