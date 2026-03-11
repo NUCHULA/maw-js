@@ -9,13 +9,16 @@ const isTouch = typeof window !== "undefined" && ("ontouchstart" in window || na
 
 // --- Sub-components ---
 
-function AgentControls({ agent, isBusy, displayName, accent, inputOpen, send, onMic }: {
-  agent: AgentState; isBusy: boolean; displayName: string; accent: string;
+function AgentControls({ agent, displayName, accent, inputOpen, send, onMic }: {
+  agent: AgentState; displayName: string; accent: string;
   inputOpen: boolean; send: (msg: object) => void; onMic: (e: React.MouseEvent) => void;
 }) {
+  const isBusy = agent.status === "busy";
+  const isIdle = agent.status === "idle";
   return (
     <div className="flex items-center gap-1.5 flex-shrink-0">
-      {isBusy ? (
+      {/* Busy → pause (interrupt), Idle → play (wake), Ready → nothing */}
+      {isBusy && (
         <button
           className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer transition-all active:scale-90"
           style={{ background: "rgba(251,191,36,0.12)" }}
@@ -26,7 +29,8 @@ function AgentControls({ agent, isBusy, displayName, accent, inputOpen, send, on
             <rect x={6} y={5} width={4} height={14} rx={1} /><rect x={14} y={5} width={4} height={14} rx={1} />
           </svg>
         </button>
-      ) : (
+      )}
+      {isIdle && (
         <button
           className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer transition-all active:scale-90"
           style={{ background: "rgba(34,197,94,0.12)" }}
@@ -268,7 +272,7 @@ export const AgentRow = memo(function AgentRow({
         <AgentInfo agent={agent} isBusy={isBusy} displayName={displayName} accent={accent}
           agoLabel={agoLabel} saiyan={saiyan} saiyanSource={saiyanSource} feedLog={feedLog} />
 
-        {send && <AgentControls agent={agent} isBusy={isBusy} displayName={displayName} accent={accent}
+        {send && <AgentControls agent={agent} displayName={displayName} accent={accent}
           inputOpen={inputOpen} send={send} onMic={handleMic} />}
       </div>
 
