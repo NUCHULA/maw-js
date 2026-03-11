@@ -6,7 +6,6 @@ import { SpeechOverlay } from "./SpeechOverlay";
 import { roomStyle, PREVIEW_CARD } from "../lib/constants";
 import { BottomStats } from "./BottomStats";
 import { useFps } from "./FpsCounter";
-import { useSpeech } from "../hooks/useSpeech";
 import { useFleetStore, RECENT_TTL_MS, type RecentEntry } from "../lib/store";
 import type { AgentState, Session, AgentEvent } from "../lib/types";
 
@@ -84,15 +83,11 @@ export const FleetGrid = memo(function FleetGrid({
   const observe = useVisibleTargets(send);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // --- Speech (walkie-talkie) ---
-  const speech = useSpeech(send);
+  // --- Mic popup (walkie-talkie) ---
+  const [micTarget, setMicTarget] = useState<string | null>(null);
   const onMicClick = useCallback((target: string) => {
-    if (speech.listening && speech.target === target) {
-      speech.stopListening();
-    } else {
-      speech.startListening(target);
-    }
-  }, [speech]);
+    setMicTarget(prev => prev === target ? null : target);
+  }, []);
 
   // --- Zustand store ---
   const { recentMap, markBusy, pruneRecent, sortMode, setSortMode, grouped, toggleGrouped, collapsed, toggleCollapsed } = useFleetStore();
@@ -297,7 +292,7 @@ export const FleetGrid = memo(function FleetGrid({
                     saiyan={saiyanTargets.has(entry.target)} isLast={i === recentlyActive.length - 1}
                     agoLabel={agoLabel}
                     observe={observe} showPreview={showPreview} hidePreview={hidePreview} onAgentClick={onAgentClick}
-                    onMicClick={onMicClick} isMicActive={speech.listening && speech.target === entry.target} />
+                    onMicClick={onMicClick} isMicActive={micTarget === entry.target} />
                 );
               })}
             </div>
@@ -330,7 +325,7 @@ export const FleetGrid = memo(function FleetGrid({
                     <AgentRow key={agent.target} agent={agent} accent={style.accent} roomLabel={vr.label}
                       saiyan={saiyanTargets.has(agent.target)} isLast={i === vr.agents.length - 1}
                       observe={observe} showPreview={showPreview} hidePreview={hidePreview} onAgentClick={onAgentClick}
-                      onMicClick={onMicClick} isMicActive={speech.listening && speech.target === agent.target} />
+                      onMicClick={onMicClick} isMicActive={micTarget === agent.target} />
                   ))}
                 </div>
               )}
@@ -376,17 +371,16 @@ export const FleetGrid = memo(function FleetGrid({
         </div>
       )}
 
-      {/* Speech overlay */}
-      {speech.listening && (() => {
-        const agent = agents.find(a => a.target === speech.target);
+      {/* Mic send popup */}
+      {micTarget && (() => {
+        const agent = agents.find(a => a.target === micTarget);
         return (
           <SpeechOverlay
-            listening={speech.listening}
-            transcript={speech.transcript}
-            target={speech.target}
+            target={micTarget}
             agentName={agent?.name}
             agentSession={agent?.session}
-            onStop={speech.stopListening}
+            send={send}
+            onClose={() => setMicTarget(null)}
           />
         );
       })()}
