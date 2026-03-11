@@ -182,19 +182,20 @@ export const FleetGrid = memo(function FleetGrid({
   const readyCount = agents.filter(a => a.status === "ready").length;
   const idleCount = agents.length - busyCount - readyCount;
 
-  // Recently active from zustand store — works before WebSocket connects
+  // Recently active: busy agents first, then recently-gone from store
   const recentlyActive = useMemo((): (AgentState | RecentEntry)[] => {
-    const busyTargets = new Set(busyAgents.map(a => a.target));
     const agentMap = new Map(agents.map(a => [a.target, a]));
+    const busyTargets = new Set(busyAgents.map(a => a.target));
 
-    // Get all recent entries, exclude currently busy
-    const entries = Object.values(recentMap)
+    // Recently-gone: in store but not currently busy
+    const recentGone = Object.values(recentMap)
       .filter(e => !busyTargets.has(e.target))
       .sort((a, b) => b.lastBusy - a.lastBusy)
-      .slice(0, 10);
+      .slice(0, 10)
+      .map(e => agentMap.get(e.target) || e);
 
-    // Merge with live agent data when available
-    return entries.map(e => agentMap.get(e.target) || e);
+    // Active first, then recently-gone
+    return [...busyAgents, ...recentGone];
   }, [agents, busyAgents, recentMap]);
 
   return (
@@ -271,8 +272,10 @@ export const FleetGrid = memo(function FleetGrid({
               )}
               {recentlyActive.map((entry, i) => {
                 const rs = roomStyle(entry.session);
+                const isBusyNow = "status" in entry && (entry as AgentState).status === "busy";
                 const lastBusy = recentMap[entry.target]?.lastBusy || 0;
                 const ago = Math.round((Date.now() - lastBusy) / 1000);
+                const agoLabel = isBusyNow ? undefined : (ago < 60 ? `${ago}s ago` : `${Math.floor(ago / 60)}m ago`);
                 // Build a full AgentState — use live data if available, otherwise fake from stored metadata
                 const agent: AgentState = "status" in entry
                   ? entry as AgentState
@@ -280,7 +283,7 @@ export const FleetGrid = memo(function FleetGrid({
                 return (
                   <AgentRow key={`recent-${entry.target}`} agent={agent} accent={rs.accent} roomLabel={rs.label}
                     saiyan={saiyanTargets.has(entry.target)} isLast={i === recentlyActive.length - 1}
-                    agoLabel={ago < 60 ? `${ago}s ago` : `${Math.floor(ago / 60)}m ago`}
+                    agoLabel={agoLabel}
                     observe={observe} showPreview={showPreview} hidePreview={hidePreview} onAgentClick={onAgentClick} />
                 );
               })}
