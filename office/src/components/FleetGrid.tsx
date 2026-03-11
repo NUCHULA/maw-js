@@ -1,5 +1,6 @@
 import { memo, useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { HoverPreviewCard } from "./HoverPreviewCard";
+import { MiniPreview } from "./MiniPreview";
 import { StageSection } from "./StageSection";
 import { AgentRow } from "./AgentRow";
 import { roomStyle, PREVIEW_CARD } from "../lib/constants";
@@ -381,11 +382,12 @@ export const FleetGrid = memo(function FleetGrid({
 
       <BottomStats agents={agents} eventLog={eventLog} />
 
-      {/* Hover Preview */}
+      {/* Hover Preview — compact mini card */}
       {hoverPreview && !pinnedPreview && (
-        <div className="fixed pointer-events-auto" style={{ zIndex: 30, left: hoverPreview.pos.x, top: hoverPreview.pos.y, maxWidth: PREVIEW_CARD.width, animation: "fadeSlideIn 0.15s ease-out" }}
-          onMouseEnter={keepPreview} onMouseLeave={hidePreview}>
-          <HoverPreviewCard agent={hoverPreview.agent} roomLabel={hoverPreview.label} accent={hoverPreview.accent} />
+        <div className="fixed pointer-events-auto" style={{ zIndex: 30, left: hoverPreview.pos.x, top: hoverPreview.pos.y, animation: "fadeSlideIn 0.15s ease-out" }}
+          onMouseEnter={keepPreview} onMouseLeave={hidePreview}
+          onClick={(e) => onAgentClick(hoverPreview.agent, hoverPreview.accent, hoverPreview.label, e)}>
+          <MiniPreview agent={hoverPreview.agent} accent={hoverPreview.accent} roomLabel={hoverPreview.label} />
         </div>
       )}
 
