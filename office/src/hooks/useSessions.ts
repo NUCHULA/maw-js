@@ -48,8 +48,10 @@ export function useSessions() {
 
   const triggerFeedSaiyan = useCallback((event: FeedEvent) => {
     if (!SAIYAN_FEED_EVENTS.has(event.event)) return;
-    // Find agent by oracle name (agent.name minus "-oracle" suffix)
-    const agent = agentsRef.current.find(a => a.name.replace(/-oracle$/, "") === event.oracle);
+    // Find agent by oracle name — only match primary windows (ending with -oracle)
+    // e.g., feed oracle "hermes" → agent "hermes-oracle", NOT "hermes-bitkub"
+    const agent = agentsRef.current.find(a => a.name === `${event.oracle}-oracle`)
+      || agentsRef.current.find(a => a.name === event.oracle);
     if (!agent) return;
     const target = agent.target;
 

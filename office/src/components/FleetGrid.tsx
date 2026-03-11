@@ -187,12 +187,19 @@ export const FleetGrid = memo(function FleetGrid({
   }, [sorted, sessionAgents, grouped]);
 
   // Resolve feed activity for an agent by oracle name
+  // Only show feed activity on primary oracle windows (name ends with -oracle or exact match)
   const getFeedActivity = useCallback((agentName: string): string | null => {
     if (!feedActive) return null;
-    const oracleName = agentName.replace(/-oracle$/, "");
-    const event = feedActive.get(oracleName);
-    if (!event) return null;
-    return describeActivity(event);
+    // "hermes-oracle" → "hermes", "hermes-bitkub" → no match
+    if (agentName.endsWith("-oracle")) {
+      const oracleName = agentName.replace(/-oracle$/, "");
+      const event = feedActive.get(oracleName);
+      if (event) return describeActivity(event);
+    }
+    // Direct name match (e.g., agent named "homekeeper" without suffix)
+    const event = feedActive.get(agentName);
+    if (event) return describeActivity(event);
+    return null;
   }, [feedActive]);
 
   const busyAgents = useMemo(() => agents.filter(a => a.status === "busy"), [agents]);
