@@ -124,6 +124,7 @@ export async function cmdWake(oracle: string, opts: { task?: string; newWt?: str
 
   let targetPath = repoPath;
   let windowName = oracle;
+  let freshWorktree = false;
 
   if (opts.newWt || opts.task) {
     const name = opts.newWt || opts.task!;
@@ -150,6 +151,7 @@ export async function cmdWake(oracle: string, opts: { task?: string; newWt?: str
 
       targetPath = wtPath;
       windowName = `${oracle}-${name}`;
+      freshWorktree = true;
     }
   }
 
@@ -175,7 +177,11 @@ export async function cmdWake(oracle: string, opts: { task?: string; newWt?: str
   // Create window + start command (or with prompt)
   await ssh(`tmux new-window -t '${session}' -n '${windowName}' -c '${targetPath}'`);
   await new Promise(r => setTimeout(r, 300));
-  const cmd = buildCommand(windowName);
+  let cmd = buildCommand(windowName);
+  // Fresh worktree has no conversation — drop --continue to avoid error
+  if (freshWorktree) {
+    cmd = cmd.replace(/\s*--continue\b/, "");
+  }
   if (opts.prompt) {
     const escaped = opts.prompt.replace(/'/g, "'\\''");
     await ssh(`tmux send-keys -t '${session}:${windowName}' "${cmd.replace(/"/g, '\\"')} -p '${escaped}'" Enter`);
