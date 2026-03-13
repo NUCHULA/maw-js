@@ -1,0 +1,112 @@
+import { listSessions, ssh } from "./ssh";
+import { loadConfig } from "./config";
+import { readdirSync, readFileSync, writeFileSync } from "fs";
+import { join } from "path";
+
+const FLEET_DIR = join(import.meta.dir, "../fleet");
+
+/**
+ * maw done <window-name>
+ *
+ * Clean up a finished worktree window:
+ * 1. Kill the tmux window
+ * 2. Remove git worktree (if it is one)
+ * 3. Remove from fleet config JSON
+ */
+export async function cmdDone(windowName: string) {
+  const sessions = await listSessions();
+  const ghqRoot = loadConfig().ghqRoot;
+
+  // Find the window in running sessions
+  let sessionName: string | null = null;
+  let windowIndex: number | null = null;
+  for (const s of sessions) {
+    const w = s.windows.find(w => w.name === windowName);
+    if (w) { sessionName = s.name; windowIndex = w.index; break; }
+  }
+
+  // 1. Kill tmux window
+  if (sessionName !== null && windowIndex !== null) {
+    try {
+      await ssh(`tmux kill-window -t '${sessionName}:${windowName}'`);
+      console.log(`  \x1b[32m✓\x1b[0m killed window ${sessionName}:${windowName}`);
+    } catch {
+      console.log(`  \x1b[33m⚠\x1b[0m could not kill window (may already be closed)`);
+    }
+  } else {
+    console.log(`  \x1b[90m○\x1b[0m window '${windowName}' not running`);
+  }
+
+  // 2. Remove git worktree — find via fleet config repo path
+  let removedWorktree = false;
+  try {
+    for (const file of readdirSync(FLEET_DIR).filter(f => f.endsWith(".json"))) {
+      const config = JSON.parse(readFileSync(join(FLEET_DIR, file), "utf-8"));
+      const win = (config.windows || []).find((w: any) => w.name === windowName);
+      if (!win?.repo) continue;
+
+      const fullPath = join(ghqRoot, win.repo);
+      // Check if it's a worktree (repo name contains .wt-)
+      if (win.repo.includes(".wt-")) {
+        // Find the main repo to run git worktree remove
+        const parts = win.repo.split("/");
+        const wtDir = parts.pop()!;
+        const org = parts.join("/");
+        const mainRepo = wtDir.split(".wt-")[0];
+        const mainPath = join(ghqRoot, org, mainRepo);
+
+        try {
+          await ssh(`git -C '${mainPath}' worktree remove '${fullPath}' --force`);
+          console.log(`  \x1b[32m✓\x1b[0m removed worktree ${win.repo}`);
+          removedWorktree = true;
+        } catch (e: any) {
+          console.log(`  \x1b[33m⚠\x1b[0m worktree remove failed: ${e.message || e}`);
+        }
+      }
+      break;
+    }
+  } catch { /* fleet dir may not exist */ }
+
+  if (!removedWorktree) {
+    // Try to find worktree by scanning ghq for .wt- dirs matching the window name
+    try {
+      const ghqOut = await ssh(`find ${ghqRoot} -maxdepth 3 -name '*.wt-*' -type d 2>/dev/null | grep -i '${windowName.replace(/^[^-]+-/, "")}'`);
+      for (const wtPath of ghqOut.trim().split("\n").filter(Boolean)) {
+        const base = wtPath.split("/").pop()!;
+        const mainRepo = base.split(".wt-")[0];
+        const mainPath = wtPath.replace(base, mainRepo);
+        try {
+          await ssh(`git -C '${mainPath}' worktree remove '${wtPath}' --force`);
+          console.log(`  \x1b[32m✓\x1b[0m removed worktree ${base}`);
+          removedWorktree = true;
+        } catch {}
+      }
+    } catch { /* no matching worktrees */ }
+  }
+
+  if (!removedWorktree) {
+    console.log(`  \x1b[90m○\x1b[0m no worktree to remove (may be a main window)`);
+  }
+
+  // 3. Remove from fleet config
+  let removedFromConfig = false;
+  try {
+    for (const file of readdirSync(FLEET_DIR).filter(f => f.endsWith(".json"))) {
+      const filePath = join(FLEET_DIR, file);
+      const config = JSON.parse(readFileSync(filePath, "utf-8"));
+      const before = config.windows?.length || 0;
+      config.windows = (config.windows || []).filter((w: any) => w.name !== windowName);
+      if (config.windows.length < before) {
+        writeFileSync(filePath, JSON.stringify(config, null, 2) + "\n");
+        console.log(`  \x1b[32m✓\x1b[0m removed from ${file}`);
+        removedFromConfig = true;
+      }
+    }
+  } catch { /* fleet dir may not exist */ }
+
+  if (!removedFromConfig) {
+    console.log(`  \x1b[90m○\x1b[0m not in any fleet config`);
+  }
+
+  console.log();
+}

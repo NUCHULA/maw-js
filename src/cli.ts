@@ -8,6 +8,7 @@ import { cmdPulseAdd, cmdPulseLs } from "./pulse";
 import { cmdOracleList, cmdOracleAbout } from "./oracle";
 import { cmdWakeAll, cmdSleep, cmdFleetLs, cmdFleetRenumber, cmdFleetValidate, cmdFleetSync } from "./fleet";
 import { cmdFleetInit } from "./fleet-init";
+import { cmdDone } from "./done";
 
 const args = process.argv.slice(2);
 const cmd = args[0]?.toLowerCase();
@@ -79,6 +80,7 @@ function usage() {
   maw overview              War-room: all oracles in split panes
   maw overview neo hermes   Only specific oracles
   maw overview --kill       Tear down overview
+  maw done <window>            Clean up finished worktree window
   maw pulse add "task" [opts] Create issue + wake oracle
   maw <agent> <msg...>        Shorthand for hey
   maw <agent>                 Shorthand for peek
@@ -130,6 +132,9 @@ if (!cmd || cmd === "--help" || cmd === "-h") {
   await cmdFleetSync();
 } else if (cmd === "fleet" && !args[1]) {
   await cmdFleetLs();
+} else if (cmd === "done" || cmd === "finish") {
+  if (!args[1]) { console.error("usage: maw done <window-name>\n       e.g. maw done neo-freelance"); process.exit(1); }
+  await cmdDone(args[1]);
 } else if (cmd === "stop" || cmd === "sleep" || cmd === "rest") {
   await cmdSleep();
 } else if (cmd === "wake") {
@@ -185,6 +190,34 @@ if (!cmd || cmd === "--help" || cmd === "-h") {
   } else {
     console.error("usage: maw oracle ls");
     process.exit(1);
+  }
+} else if (cmd === "completions") {
+  // Internal: used by shell completion scripts
+  const sub = args[1];
+  if (sub === "commands") {
+    console.log("ls peek hey wake fleet stop done overview about oracle pulse serve");
+  } else if (sub === "oracles" || sub === "windows") {
+    const { readdirSync, readFileSync } = await import("fs");
+    const { join } = await import("path");
+    const fleetDir = join(import.meta.dir, "../fleet");
+    const names = new Set<string>();
+    try {
+      for (const f of readdirSync(fleetDir).filter(f => f.endsWith(".json") && !f.endsWith(".disabled"))) {
+        const config = JSON.parse(readFileSync(join(fleetDir, f), "utf-8"));
+        for (const w of (config.windows || [])) {
+          if (sub === "oracles") {
+            if (w.name.endsWith("-oracle")) names.add(w.name.replace(/-oracle$/, ""));
+          } else {
+            names.add(w.name);
+          }
+        }
+      }
+    } catch {}
+    console.log([...names].sort().join("\n"));
+  } else if (sub === "fleet") {
+    console.log("init ls renumber validate sync");
+  } else if (sub === "pulse") {
+    console.log("add ls list");
   }
 } else if (cmd === "serve") {
   const { startServer } = await import("./server");
