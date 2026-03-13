@@ -164,52 +164,93 @@ export const ConfigView = memo(function ConfigView() {
         )}
 
         <div className="flex-1 overflow-y-auto">
-          {files.map((f) => {
-            const isSelected = selected === f.path;
-            const isFleet = f.path.startsWith("fleet/");
-            return (
-              <div
-                key={f.path}
-                className="group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors"
-                style={{
-                  background: isSelected ? "rgba(34,211,238,0.08)" : "transparent",
-                  borderLeft: isSelected ? "2px solid #22d3ee" : "2px solid transparent",
-                }}
-                onClick={() => loadFile(f.path)}
-              >
-                <span
-                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                  style={{ background: f.enabled ? "#4caf50" : "#555" }}
-                  title={f.enabled ? "Active" : "Disabled"}
-                />
-                <span
-                  className="flex-1 min-w-0 text-[11px] font-mono truncate"
-                  style={{ color: isSelected ? "#22d3ee" : f.enabled ? "#cdd6f4" : "#555" }}
+          {(() => {
+            // Group: root configs, then fleet by session number prefix
+            const root = files.filter(f => !f.path.startsWith("fleet/"));
+            const fleet = files.filter(f => f.path.startsWith("fleet/"));
+            const groups = new Map<string, ConfigFile[]>();
+            for (const f of fleet) {
+              const match = f.name.match(/^(\d+)-/);
+              const key = match ? match[1] : "other";
+              if (!groups.has(key)) groups.set(key, []);
+              groups.get(key)!.push(f);
+            }
+
+            const renderFile = (f: ConfigFile, indented = false) => {
+              const isSelected = selected === f.path;
+              const isFleet = f.path.startsWith("fleet/");
+              return (
+                <div
+                  key={f.path}
+                  className="group flex items-center gap-2 py-1.5 cursor-pointer transition-colors"
+                  style={{
+                    background: isSelected ? "rgba(34,211,238,0.08)" : "transparent",
+                    borderLeft: isSelected ? "2px solid #22d3ee" : "2px solid transparent",
+                    paddingLeft: indented ? 32 : 12,
+                    paddingRight: 12,
+                  }}
+                  onClick={() => loadFile(f.path)}
                 >
-                  {f.name.replace(/\.json(\.disabled)?$/, "")}
-                </span>
-                {isFleet && (
-                  <div className="hidden group-hover:flex items-center gap-0.5 flex-shrink-0">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleToggle(f.path); }}
-                      className="text-[9px] px-1 py-0.5 rounded hover:bg-white/5 transition-colors"
-                      style={{ color: f.enabled ? "#ffa726" : "#4caf50" }}
-                      title={f.enabled ? "Disable" : "Enable"}
-                    >
-                      {f.enabled ? "off" : "on"}
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDelete(f.path); }}
-                      className="text-[9px] text-red-400/50 hover:text-red-400 px-1 py-0.5 rounded hover:bg-white/5 transition-colors"
-                      title="Delete"
-                    >
-                      x
-                    </button>
-                  </div>
+                  <span
+                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                    style={{ background: f.enabled ? "#4caf50" : "#555" }}
+                    title={f.enabled ? "Active" : "Disabled"}
+                  />
+                  <span
+                    className="flex-1 min-w-0 text-[11px] font-mono truncate"
+                    style={{ color: isSelected ? "#22d3ee" : f.enabled ? "#cdd6f4" : "#555" }}
+                  >
+                    {f.name.replace(/\.json(\.disabled)?$/, "")}
+                  </span>
+                  {isFleet && (
+                    <div className="hidden group-hover:flex items-center gap-0.5 flex-shrink-0">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleToggle(f.path); }}
+                        className="text-[9px] px-1 py-0.5 rounded hover:bg-white/5 transition-colors"
+                        style={{ color: f.enabled ? "#ffa726" : "#4caf50" }}
+                        title={f.enabled ? "Disable" : "Enable"}
+                      >
+                        {f.enabled ? "off" : "on"}
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDelete(f.path); }}
+                        className="text-[9px] text-red-400/50 hover:text-red-400 px-1 py-0.5 rounded hover:bg-white/5 transition-colors"
+                        title="Delete"
+                      >
+                        x
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            };
+
+            return (
+              <>
+                {root.length > 0 && (
+                  <>
+                    <div className="px-3 pt-2 pb-1">
+                      <span className="text-[9px] font-mono text-white/20 tracking-[2px] uppercase">Config</span>
+                    </div>
+                    {root.map(renderFile)}
+                  </>
                 )}
-              </div>
+                {[...groups.entries()].map(([num, groupFiles]) => (
+                  <div key={num}>
+                    <div className="px-3 pt-3 pb-1 flex items-center gap-2">
+                      <span className="text-[11px] font-mono text-cyan-400/40 tracking-[1px] font-bold">{num}</span>
+                      <span className="text-[11px] font-mono text-white/30 truncate">
+                        {groupFiles.map(f => f.name.replace(/\.json(\.disabled)?$/, "").replace(/^\d+-/, "")).join(", ")}
+                      </span>
+                      <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.06)" }} />
+                      <span className="text-[11px] font-mono text-white/15">{groupFiles.filter(f => f.enabled).length}/{groupFiles.length}</span>
+                    </div>
+                    {groupFiles.map(f => renderFile(f, true))}
+                  </div>
+                ))}
+              </>
             );
-          })}
+          })()}
         </div>
       </div>
 
