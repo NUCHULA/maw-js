@@ -186,7 +186,7 @@ export const ConfigView = memo(function ConfigView() {
                   style={{
                     background: isSelected ? "rgba(34,211,238,0.08)" : "transparent",
                     borderLeft: isSelected ? "2px solid #22d3ee" : "2px solid transparent",
-                    paddingLeft: indented ? 32 : 12,
+                    paddingLeft: indented ? 26 : 12,
                     paddingRight: 12,
                   }}
                   onClick={() => loadFile(f.path)}
