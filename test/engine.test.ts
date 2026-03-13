@@ -12,6 +12,7 @@ mock.module("../src/ssh", () => ({
   findWindow: () => null,
   selectWindow: async () => {},
   sendKeys: async () => {},
+  getPaneCommand: async () => "",
 }));
 
 // Must import after mocking
@@ -74,6 +75,53 @@ describe("MawEngine", () => {
     });
   });
 
+  describe("handleOpen — sends recent for busy agents", () => {
+    test("sends recent message when agents are running claude", async () => {
+      sshResult = "claude";
+
+      const feedTailer = new FeedTailer();
+      const engine = new MawEngine({ feedTailer });
+
+      // @ts-ignore — access private for testing
+      engine.cachedSessions = [
+        { name: "oracles", windows: [{ index: 1, name: "pulse-oracle", active: true }] },
+      ];
+
+      const { ws, messages } = makeWS();
+      engine.handleOpen(ws as any);
+
+      // Wait for async getPaneCommands to resolve
+      await new Promise(r => setTimeout(r, 50));
+
+      const recent = messages.find(m => m.type === "recent");
+      expect(recent).toBeDefined();
+      expect(recent!.agents).toHaveLength(1);
+      expect(recent!.agents[0].target).toBe("oracles:1");
+      expect(recent!.agents[0].name).toBe("pulse-oracle");
+      expect(recent!.agents[0].session).toBe("oracles");
+    });
+
+    test("no recent message when all agents are idle", async () => {
+      sshResult = "zsh";
+
+      const feedTailer = new FeedTailer();
+      const engine = new MawEngine({ feedTailer });
+
+      // @ts-ignore — access private for testing
+      engine.cachedSessions = [
+        { name: "oracles", windows: [{ index: 1, name: "pulse-oracle", active: true }] },
+      ];
+
+      const { ws, messages } = makeWS();
+      engine.handleOpen(ws as any);
+
+      await new Promise(r => setTimeout(r, 50));
+
+      const types = messages.map(m => m.type);
+      expect(types).not.toContain("recent");
+    });
+  });
+
   describe("broadcastSessions — no terminal scraping", () => {
     test("broadcasts sessions without recent message", async () => {
       sshResult = "oracles:1:pulse-oracle:1";
@@ -111,10 +159,9 @@ describe("MawEngine", () => {
       await new Promise(r => setTimeout(r, 50));
 
       // Should use list-windows -a (single command), not list-sessions + N list-windows
-      const listCmds = sshCommands.filter(c => c.includes("list-"));
-      expect(listCmds.length).toBe(1);
-      expect(listCmds[0]).toContain("list-windows");
-      expect(listCmds[0]).toContain("-a");
+      const listWindowsCmds = sshCommands.filter(c => c.includes("list-windows"));
+      expect(listWindowsCmds.length).toBe(1);
+      expect(listWindowsCmds[0]).toContain("-a");
     });
   });
 });

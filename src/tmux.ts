@@ -134,6 +134,15 @@ export class Tmux {
     return raw.split("\n")[0] || "";
   }
 
+  /** Batch-check which panes are running what command. */
+  async getPaneCommands(targets: string[]): Promise<Record<string, string>> {
+    const result: Record<string, string> = {};
+    await Promise.allSettled(targets.map(async (t) => {
+      try { result[t] = await this.getPaneCommand(t); } catch {}
+    }));
+    return result;
+  }
+
   async capture(target: string, lines = 80): Promise<string> {
     if (lines > 50) {
       return this.run("capture-pane", "-t", target, "-e", "-p", "-S", -lines);

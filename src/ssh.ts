@@ -28,7 +28,9 @@ export interface Session {
 }
 
 export async function listSessions(host?: string): Promise<Session[]> {
-  const raw = await ssh("tmux list-sessions -F '#{session_name}' 2>/dev/null", host);
+  let raw: string;
+  try { raw = await ssh("tmux list-sessions -F '#{session_name}' 2>/dev/null", host); }
+  catch { return []; }
   const sessions: Session[] = [];
   for (const s of raw.split("\n").filter(Boolean)) {
     const winRaw = await ssh(

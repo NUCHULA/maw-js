@@ -34,14 +34,35 @@ export class MawEngine {
     this.startIntervals();
     if (this.cachedSessions.length > 0) {
       ws.send(JSON.stringify({ type: "sessions", sessions: this.cachedSessions }));
+      this.sendBusyAgents(ws);
     } else {
       // Cold start: fetch and send directly to this client
       tmux.listAll().then(sessions => {
         this.cachedSessions = sessions;
         ws.send(JSON.stringify({ type: "sessions", sessions }));
+        this.sendBusyAgents(ws);
       }).catch(() => {});
     }
     ws.send(JSON.stringify({ type: "feed-history", events: this.feedTailer.getRecent(50) }));
+  }
+
+  /** Scan panes for busy agents and send `recent` message to client. */
+  private async sendBusyAgents(ws: MawWS) {
+    const allTargets = this.cachedSessions.flatMap(s =>
+      s.windows.map(w => `${s.name}:${w.index}`)
+    );
+    const cmds = await tmux.getPaneCommands(allTargets);
+    const busy = allTargets
+      .filter(t => /claude|codex|node/i.test(cmds[t] || ""))
+      .map(t => {
+        const [session] = t.split(":");
+        const s = this.cachedSessions.find(x => x.name === session);
+        const w = s?.windows.find(w => `${s.name}:${w.index}` === t);
+        return { target: t, name: w?.name || t, session };
+      });
+    if (busy.length > 0) {
+      ws.send(JSON.stringify({ type: "recent", agents: busy }));
+    }
   }
 
   handleMessage(ws: MawWS, msg: string | Buffer) {
