@@ -1,7 +1,9 @@
 #!/usr/bin/env bun
 process.env.MAW_CLI = "1";
 
-import { listSessions, findWindow, capture, sendKeys, getPaneCommand } from "./ssh";
+import { cmdList, cmdPeek, cmdSend } from "./commands/comm";
+import { cmdView } from "./commands/view";
+import { cmdCompletions } from "./commands/completions";
 import { cmdOverview } from "./overview";
 import { cmdWake, fetchIssuePrompt } from "./wake";
 import { cmdPulseAdd, cmdPulseLs } from "./pulse";
@@ -12,63 +14,6 @@ import { cmdDone } from "./done";
 
 const args = process.argv.slice(2);
 const cmd = args[0]?.toLowerCase();
-
-async function cmdList() {
-  const sessions = await listSessions();
-  for (const s of sessions) {
-    console.log(`\x1b[36m${s.name}\x1b[0m`);
-    for (const w of s.windows) {
-      const dot = w.active ? "\x1b[32m*\x1b[0m" : " ";
-      console.log(`  ${dot} ${w.index}: ${w.name}`);
-    }
-  }
-}
-
-async function cmdPeek(query?: string) {
-  const sessions = await listSessions();
-  if (!query) {
-    // Peek all — one line per agent
-    for (const s of sessions) {
-      for (const w of s.windows) {
-        const target = `${s.name}:${w.index}`;
-        try {
-          const content = await capture(target, 3);
-          const lastLine = content.split("\n").filter(l => l.trim()).pop() || "(empty)";
-          const dot = w.active ? "\x1b[32m*\x1b[0m" : " ";
-          console.log(`${dot} \x1b[36m${w.name.padEnd(22)}\x1b[0m ${lastLine.slice(0, 80)}`);
-        } catch {
-          console.log(`  \x1b[36m${w.name.padEnd(22)}\x1b[0m (unreachable)`);
-        }
-      }
-    }
-    return;
-  }
-  const target = findWindow(sessions, query);
-  if (!target) { console.error(`window not found: ${query}`); process.exit(1); }
-  const content = await capture(target);
-  console.log(`\x1b[36m--- ${target} ---\x1b[0m`);
-  console.log(content);
-}
-
-async function cmdSend(query: string, message: string, force = false) {
-  const sessions = await listSessions();
-  const target = findWindow(sessions, query);
-  if (!target) { console.error(`window not found: ${query}`); process.exit(1); }
-
-  // Detect active Claude session (#17)
-  if (!force) {
-    const cmd = await getPaneCommand(target);
-    const isAgent = /claude|codex|node/i.test(cmd);
-    if (!isAgent) {
-      console.error(`\x1b[31merror\x1b[0m: no active Claude session in ${target} (running: ${cmd})`);
-      console.error(`\x1b[33mhint\x1b[0m:  run \x1b[36mmaw wake ${query}\x1b[0m first, or use \x1b[36m--force\x1b[0m to send anyway`);
-      process.exit(1);
-    }
-  }
-
-  await sendKeys(target, message);
-  console.log(`\x1b[32msent\x1b[0m → ${target}: ${message}`);
-}
 
 function usage() {
   console.log(`\x1b[36mmaw\x1b[0m — Multi-Agent Workflow
@@ -124,7 +69,7 @@ function usage() {
   maw serve 8080`);
 }
 
-// --- Main ---
+// --- Main Router ---
 
 if (!cmd || cmd === "--help" || cmd === "-h") {
   usage();
@@ -209,114 +154,22 @@ if (!cmd || cmd === "--help" || cmd === "-h") {
     process.exit(1);
   }
 } else if (cmd === "completions") {
-  // Internal: used by shell completion scripts
-  const sub = args[1];
-  if (sub === "commands") {
-    console.log("ls peek hey wake fleet stop done overview about oracle pulse view create-view serve");
-  } else if (sub === "oracles" || sub === "windows") {
-    const { readdirSync, readFileSync } = await import("fs");
-    const { join } = await import("path");
-    const fleetDir = join(import.meta.dir, "../fleet");
-    const names = new Set<string>();
-    try {
-      for (const f of readdirSync(fleetDir).filter(f => f.endsWith(".json") && !f.endsWith(".disabled"))) {
-        const config = JSON.parse(readFileSync(join(fleetDir, f), "utf-8"));
-        for (const w of (config.windows || [])) {
-          if (sub === "oracles") {
-            if (w.name.endsWith("-oracle")) names.add(w.name.replace(/-oracle$/, ""));
-          } else {
-            names.add(w.name);
-          }
-        }
-      }
-    } catch {}
-    console.log([...names].sort().join("\n"));
-  } else if (sub === "fleet") {
-    console.log("init ls renumber validate sync");
-  } else if (sub === "pulse") {
-    console.log("add ls list");
-  }
+  await cmdCompletions(args[1]);
 } else if (cmd === "view" || cmd === "create-view" || cmd === "attach") {
   if (!args[1]) { console.error("usage: maw view <agent> [window] [--clean]"); process.exit(1); }
   const clean = args.includes("--clean");
   const viewArgs = args.slice(1).filter(a => a !== "--clean");
-  const agent = viewArgs[0];
-  const windowHint = viewArgs[1]; // optional: window name or index
-
-  // Find the session
-  const sessions = await listSessions();
-  const allWindows = sessions.flatMap(s => s.windows.map(w => ({ session: s.name, ...w })));
-
-  // Resolve agent → session
-  let sessionName: string | null = null;
-  for (const s of sessions) {
-    if (s.name.endsWith(`-${agent}`) || s.name === agent) { sessionName = s.name; break; }
-    if (s.windows.some(w => w.name.toLowerCase().includes(agent.toLowerCase()))) { sessionName = s.name; break; }
-  }
-  if (!sessionName) { console.error(`session not found for: ${agent}`); process.exit(1); }
-
-  // Generate unique view name
-  const viewName = `${agent}-view${windowHint ? `-${windowHint}` : ""}`;
-
-  // Kill existing view with same name
-  const { Tmux } = await import("./tmux");
-  const t = new Tmux();
-  await t.killSession(viewName);
-
-  // Create grouped session
-  await t.newGroupedSession(sessionName, viewName, { cols: 200, rows: 50 });
-  console.log(`\x1b[36mcreated\x1b[0m → ${viewName} (grouped with ${sessionName})`);
-
-  // Select specific window if requested
-  if (windowHint) {
-    const win = allWindows.find(w =>
-      w.session === sessionName && (
-        w.name === windowHint ||
-        w.name.includes(windowHint) ||
-        String(w.index) === windowHint
-      )
-    );
-    if (win) {
-      await t.selectWindow(`${viewName}:${win.index}`);
-      console.log(`\x1b[36mwindow\x1b[0m  → ${win.name} (${win.index})`);
-    } else {
-      console.error(`\x1b[33mwarn\x1b[0m: window '${windowHint}' not found, using default`);
-    }
-  }
-
-  // Hide status bar if --clean
-  if (clean) {
-    await t.set(viewName, "status", "off");
-  }
-
-  // Attach interactively
-  const { loadConfig: lc } = await import("./config");
-  const host = process.env.MAW_HOST || lc().host || "white.local";
-  const isLocal = host === "local" || host === "localhost";
-  const attachArgs = isLocal
-    ? ["tmux", "attach-session", "-t", viewName]
-    : ["ssh", "-tt", host, `tmux attach-session -t '${viewName}'`];
-  console.log(`\x1b[36mattach\x1b[0m  → ${viewName}${clean ? " (clean)" : ""}`);
-  const proc = Bun.spawn(attachArgs, { stdin: "inherit", stdout: "inherit", stderr: "inherit" });
-  const exitCode = await proc.exited;
-
-  // Cleanup: kill grouped session after detach
-  await t.killSession(viewName);
-  console.log(`\x1b[90mcleaned\x1b[0m → ${viewName}`);
-  process.exit(exitCode);
-
+  await cmdView(viewArgs[0], viewArgs[1], clean);
 } else if (cmd === "serve") {
   const { startServer } = await import("./server");
   startServer(args[1] ? +args[1] : 3456);
 } else {
-  // Default: agent name
+  // Default: agent name shorthand
   if (args.length >= 2) {
-    // maw neo what's up → send
     const f = args.includes("--force");
     const m = args.slice(1).filter(a => a !== "--force");
     await cmdSend(args[0], m.join(" "), f);
   } else {
-    // maw neo → peek
     await cmdPeek(args[0]);
   }
 }
