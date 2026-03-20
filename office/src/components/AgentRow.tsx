@@ -315,28 +315,20 @@ export const AgentRow = memo(function AgentRow({
         role="button" tabIndex={0} aria-label={`${agent.name} - ${agent.status}`}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.preventDefault(); }}
       >
-        {/* Avatar — full chibi when active, compact circle when idle */}
+        {/* Avatar */}
         <div
           className="flex-shrink-0 cursor-pointer flex items-center justify-center"
           style={{
             overflow: "visible",
-            width: alignWidth || (featured ? 96 : (isBusy || agent.status === "ready") ? 56 : 36),
-            height: featured ? 96 : (isBusy || agent.status === "ready") ? 56 : 36,
+            width: alignWidth || (featured ? 96 : 56), height: featured ? 96 : 56,
             transition: "width 0.3s, height 0.3s",
           }}
           onMouseEnter={isTouch ? undefined : (e) => showPreview(agent, accent, roomLabel, e)}
           onMouseLeave={isTouch ? undefined : () => hidePreview()}
         >
-          {isBusy || agent.status === "ready" || featured ? (
-            <svg viewBox="-40 -50 80 80" width={featured ? 96 : 56} height={featured ? 96 : 56} overflow="visible">
-              <AgentAvatar name={agent.name} target={agent.target} status={agent.status} preview={agent.preview} accent={accent} activity={feedLog?.[0]?.text} onClick={() => {}} />
-            </svg>
-          ) : (
-            <div className="w-9 h-9 rounded-full flex items-center justify-center text-[13px] font-bold"
-              style={{ background: `${accent}20`, color: `${accent}80`, border: `1px solid ${accent}15` }}>
-              {displayName.charAt(0).toUpperCase()}
-            </div>
-          )}
+          <svg viewBox="-40 -50 80 80" width={featured ? 96 : 56} height={featured ? 96 : 56} overflow="visible">
+            <AgentAvatar name={agent.name} target={agent.target} status={agent.status} preview={agent.preview} accent={accent} activity={feedLog?.[0]?.text} onClick={() => {}} />
+          </svg>
         </div>
 
         {!isTouch && (
