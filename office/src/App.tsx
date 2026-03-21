@@ -8,6 +8,7 @@ import { TerminalModal } from "./components/TerminalModal";
 import { MissionControl } from "./components/MissionControl";
 import { FleetGrid, FleetControls } from "./components/FleetGrid";
 import { OverviewGrid } from "./components/OverviewGrid";
+import { OrbitalView } from "./components/OrbitalView";
 import { VSView } from "./components/VSView";
 import { ConfigView } from "./components/ConfigView";
 import { TerminalView } from "./components/TerminalView";
@@ -300,6 +301,14 @@ export function App() {
     return (
       <Layout activeView="terminal" {...layoutProps} fullHeight>
         <TerminalView sessions={sessions} agents={agents} connected={connected} onSelectAgent={onSelectAgent} />
+      </Layout>
+    );
+  }
+
+  if (route === "orbital") {
+    return (
+      <Layout activeView="orbital" {...layoutProps}>
+        <OrbitalView sessions={sessions} agents={agents} connected={connected} onSelectAgent={onSelectAgent} />
       </Layout>
     );
   }

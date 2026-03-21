@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { href: "#dashboard", label: "Dashboard", id: "dashboard" },
   { href: "#fleet", label: "Fleet", id: "fleet" },
   { href: "#office", label: "Office", id: "office" },
+  { href: "#mission", label: "Mission", id: "mission" },
   { href: "#overview", label: "Overview", id: "overview" },
   { href: "#terminal", label: "Terminal", id: "terminal" },
   { href: "#chat", label: "Chat", id: "chat" },
