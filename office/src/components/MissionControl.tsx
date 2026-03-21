@@ -327,11 +327,45 @@ export const MissionControl = memo(function MissionControl({
         <circle cx={600} cy={500} r={450} fill="none" stroke="#ffa726" strokeWidth={0.5} opacity={0.04}
           strokeDasharray="8 16" />
 
-        {/* Center hub */}
-        <circle cx={600} cy={500} r={45} fill="none" stroke="#26c6da" strokeWidth={1} opacity={0.15} />
-        <circle cx={600} cy={500} r={7} fill="#26c6da" opacity={0.4} />
-        <text x={600} y={468} textAnchor="middle" fill="#26c6da" fontSize={12} opacity={0.5}
-          fontFamily="'SF Mono', monospace" letterSpacing={5}>MISSION CONTROL</text>
+        {/* Center hub — show busy agents or default label */}
+        {(() => {
+          const busyAgents = agents.filter(a => a.status === "busy");
+          const hubR = Math.max(45, 30 + busyAgents.length * 25);
+          return (
+            <>
+              <circle cx={600} cy={500} r={hubR} fill="none" stroke={busyAgents.length > 0 ? "#ffa726" : "#26c6da"} strokeWidth={busyAgents.length > 0 ? 1.5 : 1} opacity={busyAgents.length > 0 ? 0.3 : 0.15} />
+              {busyAgents.length === 0 ? (
+                <>
+                  <circle cx={600} cy={500} r={7} fill="#26c6da" opacity={0.4} />
+                  <text x={600} y={468} textAnchor="middle" fill="#26c6da" fontSize={12} opacity={0.5}
+                    fontFamily="'SF Mono', monospace" letterSpacing={5}>MISSION CONTROL</text>
+                </>
+              ) : (
+                <>
+                  <text x={600} y={500 - hubR + 16} textAnchor="middle" fill="#ffa726" fontSize={10} opacity={0.7}
+                    fontFamily="'SF Mono', monospace" letterSpacing={3}>ON STAGE</text>
+                  <text x={600 + 38} y={500 - hubR + 17} textAnchor="start" fill="#ffa726" fontSize={9} opacity={0.5}
+                    fontFamily="'SF Mono', monospace">{busyAgents.length}</text>
+                  {busyAgents.map((a, i) => {
+                    const cols = Math.min(busyAgents.length, 4);
+                    const rows = Math.ceil(busyAgents.length / cols);
+                    const col = i % cols;
+                    const row = Math.floor(i / cols);
+                    const spacing = 65;
+                    const ax = 600 + (col - (cols - 1) / 2) * spacing;
+                    const ay = 500 + (row - (rows - 1) / 2) * spacing;
+                    return (
+                      <g key={a.target} transform={`translate(${ax},${ay})`} className="cursor-pointer"
+                        onClick={() => onSelectAgent(a)}>
+                        <AgentAvatar name={a.name} target={a.target} status={a.status} preview="" accent="#ffa726" onClick={() => onSelectAgent(a)} />
+                      </g>
+                    );
+                  })}
+                </>
+              )}
+            </>
+          );
+        })()}
 
         {/* Connection lines from hub to sessions */}
         {layout.map((s) => (
