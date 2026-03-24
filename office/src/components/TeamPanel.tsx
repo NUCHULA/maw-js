@@ -1,5 +1,5 @@
 import { memo, useState, useEffect } from "react";
-import { apiUrl } from "../lib/api";
+import { apiUrl, wsUrl } from "../lib/api";
 
 interface TeamMember {
   name: string;
@@ -38,21 +38,29 @@ export const TeamPanel = memo(function TeamPanel() {
   const [tasks, setTasks] = useState<Record<string, Task[]>>({});
 
   useEffect(() => {
-    const poll = async () => {
+    // Initial fetch
+    fetch(apiUrl("/api/teams")).then(r => r.json()).then(d => {
+      const t = d.teams || [];
+      setTeams(t);
+      for (const team of t) {
+        setTasks(prev => ({ ...prev, [team.name]: team.tasks || [] }));
+      }
+    }).catch(() => {});
+
+    // Real-time via WebSocket
+    const ws = new WebSocket(wsUrl("/ws"));
+    ws.onmessage = (e) => {
       try {
-        const res = await fetch(apiUrl("/api/teams"));
-        const data = await res.json();
-        setTeams(data.teams || []);
-        for (const t of data.teams || []) {
-          const tr = await fetch(apiUrl(`/api/teams/${t.name}/tasks`));
-          const td = await tr.json();
-          setTasks(prev => ({ ...prev, [t.name]: td.tasks || [] }));
+        const msg = JSON.parse(e.data);
+        if (msg.type === "teams") {
+          setTeams(msg.teams || []);
+          for (const team of msg.teams || []) {
+            setTasks(prev => ({ ...prev, [team.name]: team.tasks || [] }));
+          }
         }
       } catch {}
     };
-    poll();
-    const iv = setInterval(poll, 10000);
-    return () => clearInterval(iv);
+    return () => ws.close();
   }, []);
 
   if (teams.length === 0) {
