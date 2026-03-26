@@ -13,3 +13,4 @@ wasm-vm/
 fleet/*.json
 !fleet/*.example.json
 ψ/
+*.pem
