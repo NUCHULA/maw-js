@@ -437,10 +437,12 @@ function buildOffice() {
   // Plants
   function createPlant(x, z) {
     const g = new THREE.Group();
-    g.add(Object.assign(new THREE.Mesh(
+    const pot = new THREE.Mesh(
       new THREE.CylinderGeometry(0.2, 0.25, 0.4, 8),
       new THREE.MeshPhongMaterial({ color: 0x8b6f47 })
-    ), { position: { x: 0, y: 0.2, z: 0 } }));
+    );
+    pot.position.set(0, 0.2, 0);
+    g.add(pot);
     const trunk = new THREE.Mesh(
       new THREE.CylinderGeometry(0.04, 0.06, 1.2, 6),
       new THREE.MeshPhongMaterial({ color: 0x6b4f32 })
