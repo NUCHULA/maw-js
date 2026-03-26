@@ -58,25 +58,29 @@ export class Tmux {
   // --- Sessions ---
 
   async listSessions(): Promise<TmuxSession[]> {
-    const raw = await this.run("list-sessions", "-F", "#{session_name}");
-    const sessions: TmuxSession[] = [];
-    for (const s of raw.split("\n").filter(Boolean)) {
-      const windows = await this.listWindows(s);
-      sessions.push({ name: s, windows });
-    }
-    return sessions;
+    try {
+      const raw = await this.run("list-sessions", "-F", "#{session_name}");
+      const sessions: TmuxSession[] = [];
+      for (const s of raw.split("\n").filter(Boolean)) {
+        const windows = await this.listWindows(s);
+        sessions.push({ name: s, windows });
+      }
+      return sessions;
+    } catch { return []; } // no tmux server running
   }
 
   /** List all windows across all sessions in a single tmux call. */
   async listAll(): Promise<TmuxSession[]> {
-    const raw = await this.run("list-windows", "-a", "-F", "#{session_name}|||#{window_index}|||#{window_name}|||#{window_active}|||#{pane_current_path}");
-    const map = new Map<string, TmuxWindow[]>();
-    for (const line of raw.split("\n").filter(Boolean)) {
-      const [session, idx, name, active, cwd] = line.split("|||");
-      if (!map.has(session)) map.set(session, []);
-      map.get(session)!.push({ index: +idx, name, active: active === "1", cwd: cwd || undefined });
-    }
-    return [...map.entries()].map(([name, windows]) => ({ name, windows }));
+    try {
+      const raw = await this.run("list-windows", "-a", "-F", "#{session_name}|||#{window_index}|||#{window_name}|||#{window_active}|||#{pane_current_path}");
+      const map = new Map<string, TmuxWindow[]>();
+      for (const line of raw.split("\n").filter(Boolean)) {
+        const [session, idx, name, active, cwd] = line.split("|||");
+        if (!map.has(session)) map.set(session, []);
+        map.get(session)!.push({ index: +idx, name, active: active === "1", cwd: cwd || undefined });
+      }
+      return [...map.entries()].map(([name, windows]) => ({ name, windows }));
+    } catch { return []; } // no tmux server running
   }
 
   async hasSession(name: string): Promise<boolean> {
