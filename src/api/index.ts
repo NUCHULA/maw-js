@@ -1,0 +1,26 @@
+import { Hono } from "hono";
+import { sessionsApi } from "./sessions";
+import { feedApi } from "./feed";
+import { teamsApi } from "./teams";
+import { configApi } from "./config";
+import { fleetApi } from "./fleet";
+import { asksApi } from "./asks";
+import { oracleApi } from "./oracle";
+import { federationApi } from "./federation";
+import { worktreesApi } from "./worktrees";
+import { uiStateApi } from "./ui-state";
+import { deprecatedApi } from "./deprecated";
+
+export const api = new Hono();
+
+api.route("/", sessionsApi);
+api.route("/", feedApi);
+api.route("/", teamsApi);
+api.route("/", configApi);
+api.route("/", fleetApi);
+api.route("/", asksApi);
+api.route("/", oracleApi);
+api.route("/", federationApi);
+api.route("/", worktreesApi);
+api.route("/", uiStateApi);
+api.route("/", deprecatedApi);

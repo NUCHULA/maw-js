@@ -1,12 +1,12 @@
-import { tmux } from "./tmux";
-import { registerBuiltinHandlers } from "./handlers";
-import { pushCapture, pushPreviews, broadcastSessions, sendBusyAgents } from "./engine.capture";
-import { StatusDetector } from "./engine.status";
-import { broadcastTeams } from "./engine.teams";
-import { getAggregatedSessions, getPeers } from "./peers";
-import type { FeedEvent } from "./lib/feed";
-import type { MawWS, Handler } from "./types";
-import type { Session } from "./ssh";
+import { tmux } from "../tmux";
+import { registerBuiltinHandlers } from "../handlers";
+import { pushCapture, pushPreviews, broadcastSessions, sendBusyAgents } from "./capture";
+import { StatusDetector } from "./status";
+import { broadcastTeams } from "./teams";
+import { getAggregatedSessions, getPeers } from "../peers";
+import type { FeedEvent } from "../lib/feed";
+import type { MawWS, Handler } from "../types";
+import type { Session } from "../ssh";
 
 type SessionInfo = { name: string; windows: { index: number; name: string; active: boolean }[] };
 

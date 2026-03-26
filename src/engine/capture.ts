@@ -1,6 +1,6 @@
-import { capture } from "./ssh";
-import { tmux } from "./tmux";
-import type { MawWS } from "./types";
+import { capture } from "../ssh";
+import { tmux } from "../tmux";
+import type { MawWS } from "../types";
 
 type SessionInfo = { name: string; windows: { index: number; name: string; active: boolean }[] };
 

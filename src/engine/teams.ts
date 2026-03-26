@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { execSync } from "child_process";
-import type { MawWS } from "./types";
+import type { MawWS } from "../types";
 
 interface TeamData {
   name: string;
