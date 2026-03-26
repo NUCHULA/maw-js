@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Talk — ARRA Oracle</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;600&family=JetBrains+Mono:wght@400;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Noto Sans Thai', -apple-system, sans-serif;
+    background: #0a0a0f; color: #fff;
+    min-height: 100vh; overflow: hidden;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Grid background */
+  .grid-bg {
+    position: fixed; inset: 0; pointer-events: none;
+    background-image: linear-gradient(rgba(100,181,246,0.02) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(100,181,246,0.02) 1px, transparent 1px);
+    background-size: 60px 60px;
+    animation: gridMove 30s linear infinite;
+  }
+  @keyframes gridMove { 100% { transform: translate(60px, 60px); } }
+
+  /* Oracle name */
+  .oracle-name {
+    position: fixed; top: 40px; text-align: center; z-index: 10;
+  }
+  .oracle-name .icon { font-size: 2rem; }
+  .oracle-name .name {
+    font-size: 1.8rem; font-weight: 600; letter-spacing: 6px;
+    text-transform: uppercase; margin-top: 4px;
+  }
+  .oracle-name .sub { color: rgba(255,255,255,0.3); font-size: 0.85rem; margin-top: 4px; }
+
+  /* The Orb — tap to awaken */
+  .orb-container {
+    position: relative; width: 220px; height: 220px;
+    cursor: pointer; -webkit-user-select: none; user-select: none;
+    z-index: 5;
+  }
+  .orb {
+    width: 100%; height: 100%; border-radius: 50%;
+    background: radial-gradient(circle at 40% 35%, rgba(100,181,246,0.3), rgba(100,181,246,0.05) 60%, transparent 80%);
+    border: 2px solid rgba(100,181,246,0.15);
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.5s ease;
+    box-shadow: 0 0 60px rgba(100,181,246,0.1), inset 0 0 40px rgba(100,181,246,0.05);
+  }
+  .orb:active { transform: scale(0.95); }
+
+  /* Orb states */
+  .orb.idle { border-color: rgba(100,181,246,0.15); }
+  .orb.listening {
+    border-color: rgba(34,197,94,0.5);
+    box-shadow: 0 0 80px rgba(34,197,94,0.2), inset 0 0 40px rgba(34,197,94,0.1);
+    animation: orbPulse 1.5s ease-in-out infinite;
+  }
+  .orb.thinking {
+    border-color: rgba(251,191,36,0.5);
+    box-shadow: 0 0 80px rgba(251,191,36,0.2), inset 0 0 40px rgba(251,191,36,0.1);
+    animation: orbSpin 2s linear infinite;
+  }
+  .orb.speaking {
+    border-color: rgba(100,181,246,0.6);
+    box-shadow: 0 0 100px rgba(100,181,246,0.3), inset 0 0 50px rgba(100,181,246,0.15);
+    animation: orbSpeak 0.8s ease-in-out infinite;
+  }
+
+  @keyframes orbPulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.05); opacity: 0.9; }
+  }
+  @keyframes orbSpin {
+    0% { border-color: rgba(251,191,36,0.5); }
+    33% { border-color: rgba(251,191,36,0.2); }
+    66% { border-color: rgba(251,191,36,0.6); }
+    100% { border-color: rgba(251,191,36,0.5); }
+  }
+  @keyframes orbSpeak {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.03); }
+  }
+
+  /* Rings around orb */
+  .ring {
+    position: absolute; border-radius: 50%; border: 1px solid;
+    pointer-events: none;
+  }
+  .ring-1 { inset: -15px; border-color: rgba(100,181,246,0.08); animation: ringRotate 20s linear infinite; }
+  .ring-2 { inset: -35px; border-color: rgba(100,181,246,0.04); animation: ringRotate 30s linear infinite reverse; }
+  .ring-3 { inset: -55px; border-color: rgba(100,181,246,0.02); animation: ringRotate 40s linear infinite; }
+  @keyframes ringRotate { 100% { transform: rotate(360deg); } }
+
+  /* Orb inner icon */
+  .orb-icon { font-size: 3.5rem; opacity: 0.6; transition: opacity 0.3s; }
+  .orb.listening .orb-icon { opacity: 1; }
+  .orb.speaking .orb-icon { opacity: 1; }
+
+  /* Status text */
+  .status {
+    margin-top: 30px; font-size: 0.9rem; color: rgba(255,255,255,0.3);
+    font-family: 'JetBrains Mono', monospace; letter-spacing: 2px;
+    text-align: center; z-index: 5; min-height: 24px;
+  }
+  .status.active { color: rgba(34,197,94,0.8); }
+
+  /* Chat messages */
+  .messages {
+    position: fixed; bottom: 100px; left: 20px; right: 20px;
+    max-height: 35vh; overflow-y: auto; z-index: 10;
+    display: flex; flex-direction: column; gap: 10px;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .messages::-webkit-scrollbar { display: none; }
+  .msg {
+    padding: 12px 16px; border-radius: 16px; font-size: 0.95rem;
+    line-height: 1.5; max-width: 85%; animation: msgIn 0.3s ease-out;
+    word-break: break-word;
+  }
+  @keyframes msgIn { from { opacity: 0; transform: translateY(10px); } }
+  .msg.user {
+    align-self: flex-end; background: rgba(100,181,246,0.15);
+    border: 1px solid rgba(100,181,246,0.2); color: #e2e8f0;
+  }
+  .msg.ai {
+    align-self: flex-start; background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08); color: #e2e8f0;
+  }
+
+  /* Text input */
+  .input-area {
+    position: fixed; bottom: 20px; left: 20px; right: 20px;
+    display: flex; gap: 10px; z-index: 10;
+  }
+  .input-area input {
+    flex: 1; padding: 14px 18px; border-radius: 14px;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+    color: #fff; font-size: 1rem; font-family: inherit; outline: none;
+    -webkit-appearance: none;
+  }
+  .input-area input:focus { border-color: rgba(100,181,246,0.4); }
+  .input-area input::-webkit-search-cancel-button,
+  .input-area input::-webkit-clear-button,
+  .input-area input::-ms-clear { display: none; }
+  .input-area button {
+    padding: 14px 20px; border-radius: 14px; border: none;
+    background: rgba(100,181,246,0.2); color: #64b5f6;
+    font-size: 1rem; font-weight: 600; cursor: pointer;
+  }
+  .input-area button:active { transform: scale(0.95); }
+
+  /* Hint */
+  .hint {
+    position: fixed; bottom: 75px; text-align: center;
+    width: 100%; font-size: 0.7rem; color: rgba(255,255,255,0.15);
+    font-family: 'JetBrains Mono', monospace; z-index: 5;
+  }
+
+  /* Back link */
+  .back {
+    position: fixed; top: 16px; left: 16px; z-index: 20;
+    color: rgba(255,255,255,0.3); text-decoration: none; font-size: 0.85rem;
+  }
+  .back:hover { color: #64b5f6; }
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+<a class="back" href="/">← Office</a>
+
+<div class="oracle-name">
+  <div class="icon" id="oracle-icon">🟢</div>
+  <div class="name" id="oracle-title" style="color: #64b5f6;">ORACLE</div>
+  <div class="sub" id="oracle-sub">tap the orb to awaken</div>
+</div>
+
+<div class="orb-container" id="orb-container" onclick="toggleListening()">
+  <div class="ring ring-1"></div>
+  <div class="ring ring-2"></div>
+  <div class="ring ring-3"></div>
+  <div class="orb idle" id="orb">
+    <span class="orb-icon">🎙️</span>
+  </div>
+</div>
+
+<div class="status" id="status">tap to speak</div>
+
+<div class="messages" id="messages"></div>
+
+<div class="hint">tap orb or type below · voice works in Thai & English</div>
+
+<div class="input-area">
+  <input type="text" id="textInput" placeholder="Type a message..."
+    inputMode="text" enterKeyHint="send" autocomplete="off" autocorrect="off">
+  <button onclick="sendText()">Send</button>
+</div>
+
+<script>
+// ===== CONFIG =====
+const ORACLE_THEMES = {
+  neo: { icon: '🟢', color: '#64b5f6', title: 'NEO', sub: 'The Builder' },
+  pulse: { icon: '💓', color: '#ef4444', title: 'PULSE', sub: 'The Manager' },
+  hermes: { icon: '📡', color: '#fbbf24', title: 'HERMES', sub: 'The Messenger' },
+  mother: { icon: '🔮', color: '#c084fc', title: 'MOTHER', sub: 'The Awakener' },
+  calliope: { icon: '📖', color: '#fb923c', title: 'CALLIOPE', sub: 'The Storyteller' },
+  pigment: { icon: '🎨', color: '#f472b6', title: 'PIGMENT', sub: 'The Designer' },
+  homekeeper: { icon: '🏠', color: '#22d3ee', title: 'HOMEKEEPER', sub: 'The Guardian' },
+  odin: { icon: '👁️', color: '#a78bfa', title: 'ODIN', sub: 'The Seer' },
+  volt: { icon: '⚡', color: '#facc15', title: 'VOLT', sub: 'The Spark' },
+  arthur: { icon: '🗡️', color: '#60a5fa', title: 'ARTHUR', sub: 'The Knight' },
+  floodboy: { icon: '🌊', color: '#38bdf8', title: 'FLOODBOY', sub: 'The Watcher' },
+  fireman: { icon: '🔥', color: '#f87171', title: 'FIREMAN', sub: 'The Protector' },
+  nexus: { icon: '🔍', color: '#4ade80', title: 'NEXUS', sub: 'The Researcher' },
+};
+
+// Detect oracle from URL: /talk/neo or default
+const pathOracle = location.pathname.split('/').pop();
+const oracle = ORACLE_THEMES[pathOracle] ? pathOracle : 'neo';
+const theme = ORACLE_THEMES[oracle] || ORACLE_THEMES.neo;
+
+// Apply theme
+document.getElementById('oracle-icon').textContent = theme.icon;
+document.getElementById('oracle-title').textContent = theme.title;
+document.getElementById('oracle-title').style.color = theme.color;
+document.getElementById('oracle-sub').textContent = theme.sub;
+document.title = `${theme.title} — ARRA Oracle`;
+
+// Recolor orb
+document.querySelectorAll('.ring').forEach(r => r.style.borderColor = theme.color + '15');
+const orbEl = document.getElementById('orb');
+orbEl.style.borderColor = theme.color + '30';
+orbEl.style.background = `radial-gradient(circle at 40% 35%, ${theme.color}30, ${theme.color}08 60%, transparent 80%)`;
+orbEl.style.boxShadow = `0 0 60px ${theme.color}15, inset 0 0 40px ${theme.color}08`;
+
+// ===== STATE =====
+let state = 'idle'; // idle, listening, thinking, speaking
+let recognition = null;
+let history = [];
+const messagesEl = document.getElementById('messages');
+const statusEl = document.getElementById('status');
+const textInput = document.getElementById('textInput');
+
+// ===== VOICE INPUT =====
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+function setState(s) {
+  state = s;
+  orbEl.className = `orb ${s}`;
+  const labels = { idle: 'tap to speak', listening: 'listening...', thinking: 'thinking...', speaking: 'speaking...' };
+  statusEl.textContent = labels[s] || '';
+  statusEl.className = s === 'idle' ? 'status' : 'status active';
+}
+
+function toggleListening() {
+  if (state === 'listening') {
+    recognition?.stop();
+    setState('idle');
+    return;
+  }
+  if (state === 'speaking') {
+    speechSynthesis.cancel();
+    setState('idle');
+    return;
+  }
+  if (state === 'thinking') return;
+
+  if (!SpeechRecognition) {
+    textInput.focus();
+    return;
+  }
+
+  recognition = new SpeechRecognition();
+  recognition.lang = 'th-TH';
+  recognition.interimResults = true;
+  recognition.continuous = false;
+
+  recognition.onstart = () => setState('listening');
+  recognition.onresult = (e) => {
+    const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
+    statusEl.textContent = transcript || 'listening...';
+    if (e.results[0].isFinal) {
+      recognition.stop();
+      if (transcript.trim()) sendMessage(transcript.trim());
+    }
+  };
+  recognition.onerror = () => setState('idle');
+  recognition.onend = () => { if (state === 'listening') setState('idle'); };
+  recognition.start();
+}
+
+// ===== SEND =====
+function sendText() {
+  const text = textInput.value.trim();
+  if (!text || state === 'thinking') return;
+  textInput.value = '';
+  sendMessage(text);
+}
+
+textInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendText();
+});
+
+async function sendMessage(text) {
+  // Show user message
+  addMessage(text, 'user');
+  history.push({ role: 'user', content: text });
+  setState('thinking');
+
+  try {
+    const res = await fetch('/api/talk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ oracle, message: text, history: history.slice(-10) }),
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const data = await res.json();
+    const reply = data.reply || data.content || 'I hear you.';
+
+    history.push({ role: 'assistant', content: reply });
+    addMessage(reply, 'ai');
+    speak(reply);
+  } catch (err) {
+    // Fallback: echo mode (no API yet)
+    const fallback = `${theme.title} is listening. API endpoint /api/talk not configured yet. Your message: "${text}"`;
+    addMessage(fallback, 'ai');
+    setState('idle');
+  }
+}
+
+function addMessage(text, type) {
+  const div = document.createElement('div');
+  div.className = `msg ${type}`;
+  div.textContent = text;
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+// ===== SPEECH OUTPUT =====
+function speak(text) {
+  if (!speechSynthesis) { setState('idle'); return; }
+
+  // Truncate for speech (long text is annoying)
+  const shortText = text.length > 300 ? text.slice(0, 300) + '...' : text;
+
+  const utter = new SpeechSynthesisUtterance(shortText);
+  utter.lang = /[ก-๙]/.test(text) ? 'th-TH' : 'en-US';
+  utter.rate = 1.0;
+  utter.pitch = 1.0;
+
+  utter.onstart = () => setState('speaking');
+  utter.onend = () => setState('idle');
+  utter.onerror = () => setState('idle');
+
+  speechSynthesis.speak(utter);
+}
+
+// ===== KEYBOARD SHORTCUT =====
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' && document.activeElement !== textInput) {
+    e.preventDefault();
+    toggleListening();
+  }
+});
+
+// ===== INIT =====
+setState('idle');
+</script>
+</body>
+</html>
