@@ -9,6 +9,7 @@ import { api } from "./api";
 import { feedBuffer, feedListeners } from "./api/feed";
 import { mountViews } from "./views/index";
 import { setupTriggerListener } from "./trigger-listener";
+import { createTransportRouter } from "./transports";
 
 const app = new Hono();
 app.use("/api/*", async (c, next) => {
@@ -31,6 +32,11 @@ import { handlePtyMessage, handlePtyClose } from "./pty";
 
 export function startServer(port = +(process.env.MAW_PORT || loadConfig().port || 3456)) {
   const engine = new MawEngine({ feedBuffer, feedListeners });
+
+  // Connect transport router
+  const router = createTransportRouter();
+  router.connectAll().catch(err => console.error("[transport] connect failed:", err));
+  engine.setTransportRouter(router);
 
   // Hook workflow triggers into feed events
   setupTriggerListener(feedListeners);

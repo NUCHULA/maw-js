@@ -129,17 +129,12 @@ function parsePublish(data: Uint8Array): { topic: string; payload: string } | nu
 
   // QoS > 0 would have packet ID here — we use QoS 0
 
-  const payload = new TextDecoder().decode(data.slice(i, 1 + (i - 1) + remainingLength - (i - 1 - 1) + 1));
-  // Simpler: payload is everything after topic
-  const payloadStart = i;
-  const payloadBytes = data.slice(payloadStart, 1 + remainingLength + (i - 1 - remainingLength > 0 ? 0 : 0));
+  // Payload = everything after topic, within remaining length
+  // headerLen = bytes before remaining-length payload (type byte + RL encoding)
+  const headerLen = i - topicLen - 2;
+  const payload = new TextDecoder().decode(data.slice(i, headerLen + remainingLength));
 
-  // Recalculate: the fixed header is (1 byte type + remaining length encoding)
-  const headerSize = i - topicLen - 2; // bytes before topic length
-  const payloadEnd = headerSize + remainingLength;
-  const payloadStr = new TextDecoder().decode(data.slice(payloadStart, 1 + (data.length > payloadEnd ? payloadEnd : data.length)));
-
-  return { topic, payload: new TextDecoder().decode(data.slice(payloadStart)) };
+  return { topic, payload };
 }
 
 export class MqttTransport implements Transport {

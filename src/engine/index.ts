@@ -8,6 +8,7 @@ import { loadConfig, buildCommand } from "../config";
 import type { FeedEvent } from "../lib/feed";
 import type { MawWS, Handler } from "../types";
 import type { Session } from "../ssh";
+import type { TransportRouter } from "../transport";
 
 type SessionInfo = { name: string; windows: { index: number; name: string; active: boolean }[] };
 
@@ -30,6 +31,7 @@ export class MawEngine {
   private crashCheckInterval: ReturnType<typeof setInterval> | null = null;
   private lastTeamsJson = { value: "" };
   private feedUnsub: (() => void) | null = null;
+  private transportRouter: TransportRouter | null = null;
 
   private feedBuffer: FeedEvent[];
   private feedListeners: Set<(event: FeedEvent) => void>;
@@ -41,6 +43,25 @@ export class MawEngine {
   }
 
   on(type: string, handler: Handler) { this.handlers.set(type, handler); }
+
+  /** Set transport router — route incoming remote messages to local tmux */
+  setTransportRouter(router: TransportRouter) {
+    this.transportRouter = router;
+    router.onMessage(async (msg) => {
+      const { findWindow } = await import("../ssh");
+      const target = findWindow(this.sessionCache.sessions, msg.to);
+      if (target) {
+        const { sendKeys } = await import("../ssh");
+        await sendKeys(target, msg.body);
+        console.log(`[transport] ${msg.transport}: ${msg.from} → ${msg.to} (${target})`);
+      }
+    });
+
+    // Route local feed events to remote transports
+    this.feedListeners.add((event) => {
+      router.publishFeed(event).catch(() => {});
+    });
+  }
 
   // --- WebSocket lifecycle ---
 
@@ -106,8 +127,27 @@ export class MawEngine {
     this.previewInterval = setInterval(() => {
       for (const ws of this.clients) this.pushPreviews(ws);
     }, 2000);
-    this.statusInterval = setInterval(() => {
-      this.status.detect(this.sessionCache.sessions, this.clients, this.feedListeners);
+    this.statusInterval = setInterval(async () => {
+      await this.status.detect(this.sessionCache.sessions, this.clients, this.feedListeners);
+      // Publish presence to transport router (feeds MQTT/HTTP peers)
+      if (this.transportRouter) {
+        const config = loadConfig();
+        const host = config.host || "local";
+        for (const s of this.sessionCache.sessions) {
+          for (const w of s.windows) {
+            const target = `${s.name}:${w.index}`;
+            const state = this.status.getStatus(target);
+            if (state) {
+              this.transportRouter.publishPresence({
+                oracle: w.name.replace(/-oracle$/, ""),
+                host,
+                status: state as "busy" | "ready" | "idle" | "crashed" | "offline",
+                timestamp: Date.now(),
+              }).catch(() => {});
+            }
+          }
+        }
+      }
     }, 3000);
     // Watch Agent Teams every 3s — broadcast changes to UI
     this.teamsInterval = setInterval(() => {

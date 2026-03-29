@@ -7,6 +7,7 @@ import { TransportRouter } from "../transport";
 import { TmuxTransport } from "./tmux";
 import { MqttTransport } from "./mqtt";
 import { HttpTransport } from "./http";
+import { LoRaTransport } from "./lora";
 import type { MqttConfig } from "./mqtt";
 
 /** Singleton router instance */
@@ -44,10 +45,13 @@ export function createTransportRouter(): TransportRouter {
     router.register(
       new HttpTransport({
         peers: config.peers,
-        selfHost: config.host || "local",
+        selfHost: config.node || config.host || "local",
       }),
     );
   }
+
+  // 4. LoRa (future hardware — stub, canReach() always false)
+  router.register(new LoRaTransport());
 
   return router;
 }
@@ -68,3 +72,4 @@ export function resetTransportRouter() {
 export { TmuxTransport } from "./tmux";
 export { MqttTransport } from "./mqtt";
 export { HttpTransport } from "./http";
+export { LoRaTransport } from "./lora";

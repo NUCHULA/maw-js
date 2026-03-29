@@ -114,6 +114,11 @@ export class StatusDetector {
     }
   }
 
+  /** Get status for a target */
+  getStatus(target: string): string | null {
+    return this.state.get(target)?.status ?? null;
+  }
+
   /** Return agents currently in "crashed" state. */
   getCrashedAgents(sessions: SessionInfo[]): CrashedAgent[] {
     const result: CrashedAgent[] = [];

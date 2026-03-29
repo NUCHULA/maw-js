@@ -105,22 +105,51 @@ export async function cmdSend(query: string, message: string, force = false) {
   const sessions = await listSessions();
   const searchIn = resolveSearchSessions(query, sessions);
   const target = findWindow(searchIn, query);
-  if (!target) { console.error(`window not found: ${query}`); process.exit(1); }
 
-  // Detect active Claude session (#17)
-  if (!force) {
-    const cmd = await getPaneCommand(target);
-    const isAgent = /claude|codex|node/i.test(cmd);
-    if (!isAgent) {
-      console.error(`\x1b[31merror\x1b[0m: no active Claude session in ${target} (running: ${cmd})`);
-      console.error(`\x1b[33mhint\x1b[0m:  run \x1b[36mmaw wake ${query}\x1b[0m first, or use \x1b[36m--force\x1b[0m to send anyway`);
-      process.exit(1);
+  // Local target found → send via tmux
+  if (target) {
+    // Detect active Claude session (#17)
+    if (!force) {
+      const cmd = await getPaneCommand(target);
+      const isAgent = /claude|codex|node/i.test(cmd);
+      if (!isAgent) {
+        console.error(`\x1b[31merror\x1b[0m: no active Claude session in ${target} (running: ${cmd})`);
+        console.error(`\x1b[33mhint\x1b[0m:  run \x1b[36mmaw wake ${query}\x1b[0m first, or use \x1b[36m--force\x1b[0m to send anyway`);
+        process.exit(1);
+      }
     }
+
+    await sendKeys(target, message);
+    await runHook("after_send", { to: query, message });
+    console.log(`\x1b[32msent\x1b[0m → ${target}: ${message}`);
+    return;
   }
 
-  await sendKeys(target, message);
-  await runHook("after_send", { to: query, message });
-  console.log(`\x1b[32msent\x1b[0m → ${target}: ${message}`);
+  // Not found locally → check agent registry for remote routing
+  const config = loadConfig();
+  const agentNode = config.agents?.[query] || config.agents?.[query.replace(/-oracle$/, "")];
+  if (agentNode && agentNode !== (config.node || "local")) {
+    // Route via federation (same as maw wire but auto-detected)
+    const port = config.port || 3456;
+    const res = await curlFetch(`http://localhost:${port}/api/send`, {
+      method: "POST",
+      body: JSON.stringify({ target: query, text: message }),
+    });
+    if (res.ok && res.data?.ok) {
+      const source = res.data.source === "local" ? "local" : `⚡ ${res.data.source}`;
+      console.log(`\x1b[36mrouted\x1b[0m ${source} → ${res.data.target}: ${message}`);
+      await runHook("after_send", { to: query, message });
+      return;
+    }
+    console.error(`\x1b[31merror\x1b[0m: agent ${query} mapped to node "${agentNode}" but send failed`);
+    process.exit(1);
+  }
+
+  console.error(`\x1b[31merror\x1b[0m: window not found: ${query}`);
+  if (config.agents && Object.keys(config.agents).length > 0) {
+    console.error(`\x1b[33mhint\x1b[0m:  known agents: ${Object.keys(config.agents).join(", ")}`);
+  }
+  process.exit(1);
 }
 
 /** maw wire — federation send via local maw server's /api/send (routes to peers) */

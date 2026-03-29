@@ -18,6 +18,12 @@ export interface TriggerConfig {
   name?: string;        // optional human label
 }
 
+/** Named peer with URL */
+export interface PeerConfig {
+  name: string;
+  url: string;
+}
+
 export interface MawConfig {
   host: string;
   port: number;
@@ -32,6 +38,12 @@ export interface MawConfig {
   federationToken?: string;
   autoRestart?: boolean;
   triggers?: TriggerConfig[];
+  /** Node identity (e.g. "white", "mba") */
+  node?: string;
+  /** Named peers with URLs */
+  namedPeers?: PeerConfig[];
+  /** Agent → node mapping (e.g. { "homekeeper": "mba", "neo": "white" }) */
+  agents?: Record<string, string>;
 }
 
 const DEFAULTS: MawConfig = {
@@ -154,6 +166,41 @@ function validateConfig(raw: Record<string, unknown>): Partial<MawConfig> {
       result.pin = raw.pin;
     } else {
       warn("pin", "must be a string");
+    }
+  }
+
+  // node: string if present
+  if ("node" in raw) {
+    if (typeof raw.node === "string" && raw.node.trim().length > 0) {
+      result.node = raw.node.trim();
+    } else {
+      warn("node", "must be a non-empty string");
+    }
+  }
+
+  // namedPeers: array of {name, url} objects
+  if ("namedPeers" in raw) {
+    if (Array.isArray(raw.namedPeers)) {
+      const valid = raw.namedPeers.filter((p: any) => {
+        if (!p || typeof p !== "object") return false;
+        if (typeof p.name !== "string" || typeof p.url !== "string") return false;
+        try { new URL(p.url); return true; } catch { return false; }
+      });
+      if (valid.length !== raw.namedPeers.length) {
+        warn("namedPeers", `has ${raw.namedPeers.length - valid.length} invalid entries`);
+      }
+      result.namedPeers = valid;
+    } else {
+      warn("namedPeers", "must be an array of {name, url}");
+    }
+  }
+
+  // agents: Record<string, string> (agent name → node name)
+  if ("agents" in raw) {
+    if (raw.agents && typeof raw.agents === "object" && !Array.isArray(raw.agents)) {
+      result.agents = raw.agents;
+    } else {
+      warn("agents", "must be an object mapping agent names to node names");
     }
   }
 
