@@ -154,7 +154,7 @@ async function load() {
 
     // Try federation status
     try {
-      const fed = await fetch(`${API}/api/federation`).then(r => r.json());
+      const fed = await fetch(`${API}/api/federation/status`).then(r => r.json());
       const peersEl = document.getElementById('peers');
       if (fed.peers && fed.peers.length > 0) {
         peersEl.innerHTML = fed.peers.map(p => `
