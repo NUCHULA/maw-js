@@ -5,12 +5,8 @@ import { warRoomView } from "./war-room";
 import { raceTrackView } from "./race-track";
 import { supermanView } from "./superman";
 import { arenaView } from "./arena";
-import { talkView } from "./talk";
-import { shrineView } from "./shrine";
 
 export function mountViews(app: Hono) {
-  app.route("/shrine", shrineView);
-  app.route("/talk", talkView);
   app.route("/arena", arenaView);
   app.route("/office-8bit", bitView);
   app.route("/war-room", warRoomView);
