@@ -159,21 +159,33 @@ async function load() {
       const peersEl = document.getElementById('peers');
       const peers = config.peers || [];
       const named = config.namedPeers || [];
-      if (named.length > 0) {
-        peersEl.innerHTML = named.map(p => `
-          <div class="peer-row">
-            <span class="peer-dot" style="background:#64b5f6"></span>
+      if (named.length > 0 || peers.length > 0) {
+        const peerList = named.length > 0 ? named : peers.map(u => ({ name: u, url: u }));
+        peersEl.innerHTML = peerList.map(p => `
+          <div class="peer-row" id="peer-${p.name}">
+            <span class="peer-dot" style="background:#555" id="dot-${p.name}"></span>
             <span class="peer-name">${p.name}</span>
             <span class="peer-url">${p.url}</span>
+            <span class="transport-status" id="status-${p.name}" style="font-size:12px;color:#555;margin-left:auto;">checking...</span>
           </div>
         `).join('');
-      } else if (peers.length > 0) {
-        peersEl.innerHTML = peers.map(p => `
-          <div class="peer-row">
-            <span class="peer-dot" style="background:#64b5f6"></span>
-            <span class="peer-name">${p}</span>
-          </div>
-        `).join('');
+        // Async health check per peer (non-blocking)
+        for (const p of peerList) {
+          fetch(`${p.url}/api/transport/status`, { signal: AbortSignal.timeout(5000) })
+            .then(r => r.json())
+            .then(d => {
+              const dot = document.getElementById('dot-' + p.name);
+              const st = document.getElementById('status-' + p.name);
+              if (dot) dot.style.background = '#4caf50';
+              if (st) { st.textContent = 'reachable'; st.style.color = '#4caf50'; }
+            })
+            .catch(() => {
+              const dot = document.getElementById('dot-' + p.name);
+              const st = document.getElementById('status-' + p.name);
+              if (dot) dot.style.background = '#f44336';
+              if (st) { st.textContent = 'unreachable'; st.style.color = '#f44336'; }
+            });
+        }
       } else {
         peersEl.innerHTML = '<div style="color:#555;font-size:13px;">No peers configured</div>';
       }
