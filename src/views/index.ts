@@ -7,8 +7,10 @@ import { supermanView } from "./superman";
 import { arenaView } from "./arena";
 import { talkView } from "./talk";
 import { shrineView } from "./shrine";
+import { federationView } from "./federation";
 
 export function mountViews(app: Hono) {
+  app.route("/federation", federationView);
   app.route("/shrine", shrineView);
   app.route("/talk", talkView);
   app.route("/arena", arenaView);
