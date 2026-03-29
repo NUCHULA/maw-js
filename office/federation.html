@@ -152,24 +152,31 @@ async function load() {
     // Config for agents + peers
     const sessions = await fetch(`${API}/api/sessions`).then(r => r.json());
 
-    // Try federation status
+    // Show peers from config (no health check — avoids blocking on unreachable peers)
     try {
-      const fed = await fetch(`${API}/api/federation/status`).then(r => r.json());
       const peersEl = document.getElementById('peers');
-      if (fed.peers && fed.peers.length > 0) {
-        peersEl.innerHTML = fed.peers.map(p => `
+      const peers = config.peers || [];
+      const named = config.namedPeers || [];
+      if (named.length > 0) {
+        peersEl.innerHTML = named.map(p => `
           <div class="peer-row">
-            <span class="peer-dot" style="background:${p.reachable ? '#4caf50' : '#f44336'}"></span>
-            <span class="peer-name">${p.url}</span>
-            <span class="peer-url">${p.reachable ? p.latency + 'ms' : 'unreachable'}</span>
+            <span class="peer-dot" style="background:#64b5f6"></span>
+            <span class="peer-name">${p.name}</span>
+            <span class="peer-url">${p.url}</span>
           </div>
         `).join('');
-        document.getElementById('node-name').textContent = `node: ${fed.localUrl.split(':').pop() || 'local'}`;
+      } else if (peers.length > 0) {
+        peersEl.innerHTML = peers.map(p => `
+          <div class="peer-row">
+            <span class="peer-dot" style="background:#64b5f6"></span>
+            <span class="peer-name">${p}</span>
+          </div>
+        `).join('');
       } else {
         peersEl.innerHTML = '<div style="color:#555;font-size:13px;">No peers configured</div>';
       }
     } catch {
-      document.getElementById('peers').innerHTML = '<div style="color:#555;font-size:13px;">Federation API not available</div>';
+      document.getElementById('peers').innerHTML = '<div style="color:#555;font-size:13px;">Config not available</div>';
     }
 
     // Agents from config
