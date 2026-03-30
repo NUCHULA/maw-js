@@ -66,8 +66,9 @@
     border-radius: 12px;
     padding: 20px 24px;
     backdrop-filter: blur(8px);
-    transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    transition: all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     cursor: pointer;
+    animation: cardFadeIn 0.4s ease-out;
     overflow: hidden;
     box-shadow: 0 4px 32px rgba(0,0,0,0.5);
   }
@@ -163,6 +164,11 @@
   }
   .sel-btn:hover { border-color: rgba(100,181,246,0.4); color: #aaa; }
   .sel-btn.active { background: rgba(100,181,246,0.15); border-color: #64b5f6; color: #64b5f6; }
+
+  @keyframes cardFadeIn {
+    from { opacity: 0; transform: translateY(30px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
 </style>
 </head>
 <body>

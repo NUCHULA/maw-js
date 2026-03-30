@@ -26,7 +26,7 @@ import { loadConfig } from "./config";
 export const SNAPSHOT_DIR = join(CONFIG_DIR, "snapshots");
 mkdirSync(SNAPSHOT_DIR, { recursive: true });
 
-const MAX_SNAPSHOTS = 48;
+const MAX_SNAPSHOTS = 720; // ~1 month at 1 snapshot/hour
 
 export interface SnapshotWindow {
   name: string;
