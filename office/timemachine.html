@@ -112,6 +112,28 @@
   @keyframes pillSlideIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
   @keyframes pillFadeOut { from { opacity: 0.8; } to { opacity: 0.4; } }
 
+  /* Rewind effect */
+  .card-stack.rewinding .card {
+    transition: none !important;
+  }
+  .rewinding-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 5;
+    pointer-events: none; opacity: 0; transition: opacity 0.3s;
+  }
+  .rewinding-overlay.active {
+    opacity: 1;
+    background:
+      repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(100,181,246,0.03) 3px, rgba(100,181,246,0.03) 4px);
+  }
+  .rewinding-date {
+    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+    z-index: 25; color: #64b5f6; font-size: 2em; font-weight: 700;
+    opacity: 0; transition: opacity 0.2s;
+    text-shadow: 0 0 20px rgba(100,181,246,0.5);
+    pointer-events: none;
+  }
+  .rewinding-date.active { opacity: 1; }
+
   /* Timeline sidebar */
   .timeline {
     position: fixed; right: 24px; top: 50%; transform: translateY(-50%);
@@ -215,6 +237,9 @@
   <div class="nav-btn" onclick="navigate(1)">&#9660;</div>
 </div>
 
+<div class="rewinding-overlay" id="rewind-overlay"></div>
+<div class="rewinding-date" id="rewind-date"></div>
+
 <div class="bottom-bar">
   scroll or use arrows to travel through time
 </div>
@@ -275,7 +300,7 @@ function renderTimeline() {
     const i = allSnaps.length - 1 - ri; // map back to original index
     const d = new Date(s.timestamp);
     const label = `${d.toLocaleDateString('en-GB')} ${days[d.getDay()]} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-    return `<div class="tl-tick${i === 0 ? ' active' : ''}" data-index="${i}" onclick="showIndex(${i})"><span class="tl-label">${label}</span></div>`;
+    return `<div class="tl-tick${i === 0 ? ' active' : ''}" data-index="${i}" onclick="rewindTo(${i})"><span class="tl-label">${label}</span></div>`;
   }).join('');
 }
 
@@ -365,12 +390,58 @@ function showIndex(idx) {
   stack.innerHTML = html;
 }
 
+let isRewinding = false;
+
 function navigate(dir) {
+  if (isRewinding) return;
   const stack = document.getElementById('card-stack');
   stack.classList.remove('navigating-up', 'navigating-down');
-  void stack.offsetWidth; // force reflow
+  void stack.offsetWidth;
   stack.classList.add(dir < 0 ? 'navigating-up' : 'navigating-down');
   showIndex(currentIndex + dir);
+}
+
+async function rewindTo(targetIdx) {
+  if (isRewinding) return;
+  const steps = Math.abs(targetIdx - currentIndex);
+  if (steps <= 2) { showIndex(targetIdx); return; }
+
+  isRewinding = true;
+  const dir = targetIdx > currentIndex ? 1 : -1;
+  const stack = document.getElementById('card-stack');
+  const overlay = document.getElementById('rewind-overlay');
+  const dateEl = document.getElementById('rewind-date');
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  // Activate rewind mode
+  stack.classList.add('rewinding');
+  overlay.classList.add('active');
+  dateEl.classList.add('active');
+
+  // Speed: faster for longer jumps, min 40ms per step
+  const baseDelay = Math.max(40, Math.min(150, 800 / steps));
+
+  for (let i = currentIndex + dir; ; i += dir) {
+    if (dir > 0 && i > targetIdx) break;
+    if (dir < 0 && i < targetIdx) break;
+
+    showIndex(i);
+
+    // Show flying date
+    const s = allSnaps[i];
+    if (s) {
+      const d = new Date(s.timestamp);
+      dateEl.textContent = `${d.toLocaleDateString('en-GB')} ${days[d.getDay()]} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    }
+
+    await new Promise(r => setTimeout(r, baseDelay));
+  }
+
+  // Settle
+  stack.classList.remove('rewinding');
+  overlay.classList.remove('active');
+  setTimeout(() => dateEl.classList.remove('active'), 500);
+  isRewinding = false;
 }
 
 // Mouse wheel navigation
