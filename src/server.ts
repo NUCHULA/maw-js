@@ -23,7 +23,7 @@ function getVersionString(): string {
       const raw = require("child_process").execSync("git log -1 --format=%ci", { cwd: import.meta.dir }).toString().trim();
       const d = new Date(raw);
       const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-      buildDate = `${days[d.getDay()]} ${raw.slice(0, 16)}`;
+      buildDate = `${raw.slice(0, 10)} ${days[d.getDay()]} ${raw.slice(11, 16)}`;
     } catch {}
     return `v${pkg.version}${hash ? ` (${hash})` : ""}${buildDate ? ` built ${buildDate}` : ""}`;
   } catch { return ""; }
