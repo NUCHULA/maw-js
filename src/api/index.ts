@@ -15,6 +15,7 @@ import { costsApi } from "./costs";
 import { triggersApi } from "./triggers";
 import { avengersApi } from "./avengers";
 import { transportApi } from "./transport";
+import { workspaceApi } from "./workspace";
 import { federationAuth } from "../lib/federation-auth";
 
 export const api = new Hono();
@@ -38,3 +39,4 @@ api.route("/", costsApi);
 api.route("/", triggersApi);
 api.route("/", avengersApi);
 api.route("/", transportApi);
+api.route("/", workspaceApi);
