@@ -102,6 +102,7 @@ function usage() {
   maw costs                   Token usage + estimated cost per agent
   maw pr [window]             Create PR from current branch (links issue if branch has issue-N)
   maw triggers                List configured workflow triggers
+  maw ping [node]             Check peer connectivity (all or specific)
   maw transport status        Transport layer connectivity (tmux/MQTT/HTTP)
   maw avengers status         ARRA-01 rate limit monitor (all accounts)
   maw avengers best           Account with most capacity
@@ -376,6 +377,9 @@ if (cmd === "--version" || cmd === "-v") {
 } else if (cmd === "broadcast" || cmd === "shout") {
   const msg = args.slice(1).join(" ");
   await cmdBroadcast(msg);
+} else if (cmd === "ping") {
+  const { cmdPing } = await import("./commands/ping");
+  await cmdPing(args[1]);
 } else if (cmd === "transport" || cmd === "tp") {
   const sub = args[1]?.toLowerCase();
   if (!sub || sub === "status") {
