@@ -26,7 +26,7 @@ export async function curlFetch(url: string, opts?: {
   const args = ["curl", "-sf", "--max-time", String(timeoutSec)];
   if (opts?.method) args.push("-X", opts.method);
   if (opts?.body) {
-    args.push("-H", "Content-Type: application/json", "-d", opts.body);
+    args.push("-H", "Content-Type:application/json", "-d", opts.body);
   }
 
   // Auto-sign with federation token (HMAC-SHA256)
