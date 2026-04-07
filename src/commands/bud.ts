@@ -49,7 +49,7 @@ export async function cmdBud(name: string, opts: BudOpts = {}) {
 
   const budRepoName = `${name}-oracle`;
   const budRepoSlug = `${org}/${budRepoName}`;
-  const budRepoPath = join(ghqRoot, org, budRepoName);
+  const budRepoPath = join(ghqRoot, "github.com", org, budRepoName);
 
   console.log(`\n  \x1b[36m🧬 Budding\x1b[0m — ${parentName} → ${name}\n`);
 

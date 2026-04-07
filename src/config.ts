@@ -5,7 +5,7 @@ import { CONFIG_FILE } from "./paths";
 
 function detectGhqRoot(): string {
   try { return execSync("ghq root", { encoding: "utf-8" }).trim(); }
-  catch { return join(require("os").homedir(), "Code/github.com"); }
+  catch { return join(require("os").homedir(), "Code"); }
 }
 
 export type TriggerEvent = "issue-close" | "pr-merge" | "agent-idle" | "agent-wake" | "agent-crash";
