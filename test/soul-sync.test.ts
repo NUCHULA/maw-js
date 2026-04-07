@@ -92,59 +92,32 @@ describe("soul-sync", () => {
     });
   });
 
-  describe("findParent / findChildren (fleet config parsing)", () => {
-    test("findParent returns null for oracle without parent", () => {
-      const { findParentForTest } = require("./soul-sync-helpers");
+  describe("findPeers (flat peer lookup)", () => {
+    test("returns empty for oracle without sync_peers", () => {
+      const { findPeersForTest } = require("./soul-sync-helpers");
       const fleet = [
         { name: "01-pulse", windows: [{ name: "pulse-oracle", repo: "laris-co/pulse-oracle" }] },
         { name: "06-floodboy", windows: [{ name: "floodboy-oracle", repo: "laris-co/floodboy-oracle" }] },
       ];
-      expect(findParentForTest("floodboy", fleet)).toBeNull();
+      expect(findPeersForTest("floodboy", fleet)).toEqual([]);
     });
 
-    test("findParent returns parent from child's parent field", () => {
-      const { findParentForTest } = require("./soul-sync-helpers");
+    test("returns configured sync_peers", () => {
+      const { findPeersForTest } = require("./soul-sync-helpers");
       const fleet = [
-        { name: "01-pulse", windows: [{ name: "pulse-oracle", repo: "laris-co/pulse-oracle" }], children: ["floodboy", "fireman"] },
-        { name: "06-floodboy", windows: [{ name: "floodboy-oracle", repo: "laris-co/floodboy-oracle" }], parent: "pulse" },
+        { name: "06-floodboy", windows: [], sync_peers: ["pulse", "neo"] },
+        { name: "01-pulse", windows: [], sync_peers: ["floodboy", "fireman"] },
       ];
-      expect(findParentForTest("floodboy", fleet)).toBe("pulse");
+      expect(findPeersForTest("floodboy", fleet)).toEqual(["pulse", "neo"]);
+      expect(findPeersForTest("pulse", fleet)).toEqual(["floodboy", "fireman"]);
     });
 
-    test("findParent returns parent via children[] reverse lookup", () => {
-      const { findParentForTest } = require("./soul-sync-helpers");
+    test("returns empty for oracle with empty sync_peers", () => {
+      const { findPeersForTest } = require("./soul-sync-helpers");
       const fleet = [
-        { name: "01-pulse", windows: [{ name: "pulse-oracle", repo: "laris-co/pulse-oracle" }], children: ["floodboy", "fireman"] },
-        { name: "06-floodboy", windows: [{ name: "floodboy-oracle", repo: "laris-co/floodboy-oracle" }] },
+        { name: "06-floodboy", windows: [], sync_peers: [] },
       ];
-      // floodboy doesn't have parent field, but pulse lists it as child
-      expect(findParentForTest("floodboy", fleet)).toBe("pulse");
-    });
-
-    test("findChildren returns all children from both directions", () => {
-      const { findChildrenForTest } = require("./soul-sync-helpers");
-      const fleet = [
-        { name: "01-pulse", windows: [], children: ["floodboy", "fireman"] },
-        { name: "06-floodboy", windows: [], parent: "pulse" },
-        { name: "07-fireman", windows: [], parent: "pulse" },
-        { name: "09-dustboychain", windows: [], parent: "pulse" },
-      ];
-      const children = findChildrenForTest("pulse", fleet);
-      expect(children).toContain("floodboy");
-      expect(children).toContain("fireman");
-      expect(children).toContain("dustboychain");
-      expect(children.length).toBe(3);
-    });
-
-    test("findChildren deduplicates", () => {
-      const { findChildrenForTest } = require("./soul-sync-helpers");
-      const fleet = [
-        { name: "01-pulse", windows: [], children: ["floodboy"] },
-        { name: "06-floodboy", windows: [], parent: "pulse" },
-      ];
-      const children = findChildrenForTest("pulse", fleet);
-      // floodboy appears in both children[] and parent field — should not duplicate
-      expect(children.length).toBe(1);
+      expect(findPeersForTest("floodboy", fleet)).toEqual([]);
     });
   });
 });

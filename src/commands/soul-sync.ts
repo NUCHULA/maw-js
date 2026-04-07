@@ -63,47 +63,16 @@ async function resolveOraclePath(name: string): Promise<string | null> {
 }
 
 /**
- * Find parent oracle name for a given oracle from fleet config.
+ * Find peer oracle names for a given oracle from fleet config.
+ * Flat lookup — each oracle declares its own sync_peers.
  */
-export function findParent(oracleName: string): string | null {
+export function findPeers(oracleName: string): string[] {
   const fleet = loadFleet();
   for (const sess of fleet) {
     const name = sess.name.replace(/^\d+-/, "");
-    if (name === oracleName && sess.parent) return sess.parent;
+    if (name === oracleName && sess.sync_peers) return sess.sync_peers;
   }
-  // Also check if any session lists this oracle as a child
-  for (const sess of fleet) {
-    if (sess.children?.includes(oracleName)) {
-      return sess.name.replace(/^\d+-/, "");
-    }
-  }
-  return null;
-}
-
-/**
- * Find children oracle names for a given parent from fleet config.
- */
-export function findChildren(parentName: string): string[] {
-  const fleet = loadFleet();
-  const children: string[] = [];
-
-  // Direct: parent has children[] field
-  for (const sess of fleet) {
-    const name = sess.name.replace(/^\d+-/, "");
-    if (name === parentName && sess.children) {
-      children.push(...sess.children);
-    }
-  }
-
-  // Reverse: child has parent field pointing to this parent
-  for (const sess of fleet) {
-    const name = sess.name.replace(/^\d+-/, "");
-    if (sess.parent === parentName && !children.includes(name)) {
-      children.push(name);
-    }
-  }
-
-  return children;
+  return [];
 }
 
 export interface SoulSyncResult {
@@ -133,98 +102,74 @@ function syncOracleVaults(fromPath: string, toPath: string, fromName: string, to
 }
 
 /**
- * maw soul-sync [target]
+ * maw soul-sync [peer] [--from <peer>]
  *
- * Without target: sync current oracle's ψ/ to its configured parent.
- * With target: pull ψ/ from all children of the named parent oracle.
+ * Flat mycelium model — any oracle syncs to any peer.
  *
- * Direction:
- *   child → parent  (default, auto-detected from fleet config)
- *   parent ← children  (when target is a parent name)
+ *   maw ss              push to all configured sync_peers
+ *   maw ss <peer>       push to specific peer
+ *   maw ss --from <p>   pull from specific peer
  */
-export async function cmdSoulSync(target?: string): Promise<SoulSyncResult[]> {
+export async function cmdSoulSync(target?: string, opts?: { from?: boolean; cwd?: string }): Promise<SoulSyncResult[]> {
   const results: SoulSyncResult[] = [];
 
-  if (target) {
-    // Pull mode: target is a parent, pull from all children
-    const children = findChildren(target);
-    if (children.length === 0) {
-      console.log(`  \x1b[33m⚠\x1b[0m soul-sync: no children configured for '${target}'`);
-      return results;
-    }
-
-    const parentPath = await resolveOraclePath(target);
-    if (!parentPath) {
-      console.error(`  \x1b[31m✗\x1b[0m soul-sync: cannot find repo for parent '${target}'`);
-      return results;
-    }
-
-    console.log(`\n  \x1b[36m⚡ Soul Sync\x1b[0m — pulling ${children.length} children → ${target}\n`);
-
-    for (const child of children) {
-      const childPath = await resolveOraclePath(child);
-      if (!childPath) {
-        console.log(`  \x1b[33m⚠\x1b[0m ${child}: repo not found, skipping`);
-        continue;
-      }
-
-      const result = syncOracleVaults(childPath, parentPath, child, target);
-      results.push(result);
-
-      if (result.total === 0) {
-        console.log(`  \x1b[90m○\x1b[0m ${child} → nothing new`);
-      } else {
-        const parts = Object.entries(result.synced).map(([dir, n]) => `${n} ${dir.split("/").pop()}`);
-        console.log(`  \x1b[32m✓\x1b[0m ${child} → ${parts.join(", ")}`);
-      }
-    }
-  } else {
-    // Push mode: detect current oracle, sync to parent
-    let cwd = "";
+  // Resolve current oracle
+  let cwd = opts?.cwd || "";
+  if (!cwd) {
     try {
       cwd = (await ssh("tmux display-message -p '#{pane_current_path}'")).trim();
     } catch {
       cwd = process.cwd();
     }
+  }
 
-    // Detect oracle name from cwd
-    const parts = cwd.split("/");
-    const repoName = parts.pop() || "";
-    const oracleName = repoName.replace(/-oracle$/, "").replace(/\.wt-.*$/, "");
+  const cwdParts = cwd.split("/");
+  const repoName = cwdParts.pop() || "";
+  const oracleName = repoName.replace(/-oracle$/, "").replace(/\.wt-.*$/, "");
 
-    const parent = findParent(oracleName);
-    if (!parent) {
-      console.log(`  \x1b[33m⚠\x1b[0m soul-sync: no parent configured for '${oracleName}'`);
-      console.log(`  \x1b[90mAdd "parent": "<name>" to fleet config, or run: maw soul-sync <parent>\x1b[0m`);
-      return results;
+  // Resolve current oracle path (may be worktree, use git common dir)
+  let oraclePath = cwd;
+  try {
+    const commonDir = (await ssh(`git -C '${cwd}' rev-parse --git-common-dir`)).trim();
+    if (commonDir && commonDir !== ".git") {
+      const mainGit = commonDir.startsWith("/") ? commonDir : join(cwd, commonDir);
+      oraclePath = join(mainGit, "..");
+    }
+  } catch { /* use cwd */ }
+
+  // Determine peers to sync with
+  const peers = target ? [target] : findPeers(oracleName);
+  if (peers.length === 0) {
+    console.log(`  \x1b[33m⚠\x1b[0m soul-sync: no sync_peers configured for '${oracleName}'`);
+    console.log(`  \x1b[90mAdd "sync_peers": ["name"] to fleet config, or run: maw ss <peer>\x1b[0m`);
+    return results;
+  }
+
+  const direction = opts?.from ? "pull" : "push";
+  const label = direction === "pull"
+    ? `pulling ${peers[0]} → ${oracleName}`
+    : `pushing ${oracleName} → ${peers.join(", ")}`;
+  console.log(`\n  \x1b[36m⚡ Soul Sync\x1b[0m — ${label}\n`);
+
+  for (const peer of peers) {
+    const peerPath = await resolveOraclePath(peer);
+    if (!peerPath) {
+      console.log(`  \x1b[33m⚠\x1b[0m ${peer}: repo not found, skipping`);
+      continue;
     }
 
-    const parentPath = await resolveOraclePath(parent);
-    if (!parentPath) {
-      console.error(`  \x1b[31m✗\x1b[0m soul-sync: cannot find repo for parent '${parent}'`);
-      return results;
-    }
+    const [from, to, fromName, toName] = direction === "pull"
+      ? [peerPath, oraclePath, peer, oracleName]
+      : [oraclePath, peerPath, oracleName, peer];
 
-    // Resolve current oracle path (may be worktree, use git common dir)
-    let oraclePath = cwd;
-    try {
-      const commonDir = (await ssh(`git -C '${cwd}' rev-parse --git-common-dir`)).trim();
-      if (commonDir && commonDir !== ".git") {
-        const mainGit = commonDir.startsWith("/") ? commonDir : join(cwd, commonDir);
-        oraclePath = join(mainGit, "..");
-      }
-    } catch { /* use cwd */ }
-
-    console.log(`\n  \x1b[36m⚡ Soul Sync\x1b[0m — ${oracleName} → ${parent}\n`);
-
-    const result = syncOracleVaults(oraclePath, parentPath, oracleName, parent);
+    const result = syncOracleVaults(from, to, fromName, toName);
     results.push(result);
 
     if (result.total === 0) {
-      console.log(`  \x1b[90m○\x1b[0m nothing new to sync`);
+      console.log(`  \x1b[90m○\x1b[0m ${fromName} → ${toName}: nothing new`);
     } else {
       const parts = Object.entries(result.synced).map(([dir, n]) => `${n} ${dir.split("/").pop()}`);
-      console.log(`  \x1b[32m✓\x1b[0m synced ${parts.join(", ")} → ${parent}/ψ/`);
+      console.log(`  \x1b[32m✓\x1b[0m ${fromName} → ${toName}: ${parts.join(", ")}`);
     }
   }
 

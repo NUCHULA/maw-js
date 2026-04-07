@@ -35,46 +35,17 @@ export function syncDirForTest(srcDir: string, dstDir: string): number {
 interface FleetEntry {
   name: string;
   windows: { name: string; repo: string }[];
-  parent?: string;
-  children?: string[];
+  sync_peers?: string[];
   skip_command?: boolean;
 }
 
 /**
- * Pure logic — findParent without loadFleet() dependency.
+ * Pure logic — findPeers without loadFleet() dependency.
  */
-export function findParentForTest(oracleName: string, fleet: FleetEntry[]): string | null {
+export function findPeersForTest(oracleName: string, fleet: FleetEntry[]): string[] {
   for (const sess of fleet) {
     const name = sess.name.replace(/^\d+-/, "");
-    if (name === oracleName && sess.parent) return sess.parent;
+    if (name === oracleName && sess.sync_peers) return sess.sync_peers;
   }
-  for (const sess of fleet) {
-    if (sess.children?.includes(oracleName)) {
-      return sess.name.replace(/^\d+-/, "");
-    }
-  }
-  return null;
-}
-
-/**
- * Pure logic — findChildren without loadFleet() dependency.
- */
-export function findChildrenForTest(parentName: string, fleet: FleetEntry[]): string[] {
-  const children: string[] = [];
-
-  for (const sess of fleet) {
-    const name = sess.name.replace(/^\d+-/, "");
-    if (name === parentName && sess.children) {
-      children.push(...sess.children);
-    }
-  }
-
-  for (const sess of fleet) {
-    const name = sess.name.replace(/^\d+-/, "");
-    if (sess.parent === parentName && !children.includes(name)) {
-      children.push(name);
-    }
-  }
-
-  return children;
+  return [];
 }

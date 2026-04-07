@@ -127,7 +127,12 @@ export async function routeFleet(cmd: string, args: string[]): Promise<boolean> 
     return true;
   }
   if (cmd === "soul-sync" || cmd === "soulsync" || cmd === "ss") {
-    await cmdSoulSync(args[1]);
+    const fromIdx = args.indexOf("--from");
+    if (fromIdx !== -1) {
+      await cmdSoulSync(args[fromIdx + 1], { from: true });
+    } else {
+      await cmdSoulSync(args[1]);
+    }
     return true;
   }
   return false;

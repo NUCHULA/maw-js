@@ -12,10 +12,8 @@ export interface FleetSession {
   name: string;
   windows: FleetWindow[];
   skip_command?: boolean;
-  /** Parent oracle name (e.g. "pulse"). Child syncs ψ/ to parent on done. */
-  parent?: string;
-  /** Child oracle names. Parent can pull ψ/ from all children. */
-  children?: string[];
+  /** Peer oracle names for soul-sync (flat, no hierarchy). */
+  sync_peers?: string[];
 }
 
 export interface FleetEntry {
