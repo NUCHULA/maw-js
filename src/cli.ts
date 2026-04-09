@@ -28,6 +28,22 @@ if (cmd === "--version" || cmd === "-v") {
     buildDate = `${raw.slice(0, 10)} ${days[d.getDay()]} ${raw.slice(11, 16)}`;
   } catch {}
   console.log(`maw v${pkg.version}${hash ? ` (${hash})` : ""}${buildDate ? ` built ${buildDate}` : ""}`);
+} else if (cmd === "update" || cmd === "upgrade") {
+  const pkg = require("../package.json");
+  const { execSync } = require("child_process");
+  const ref = args[1] || "alpha"; // default: update from alpha
+  const repo = "Soul-Brews-Studio/maw-js";
+  console.log(`\n  🍺 Updating maw from github:${repo}#${ref}...\n`);
+  try {
+    execSync(`bun add -g github:${repo}#${ref}`, { stdio: "inherit" });
+    // Show new version
+    let newHash = "";
+    try { newHash = execSync("git rev-parse --short HEAD", { cwd: import.meta.dir }).toString().trim(); } catch {}
+    console.log(`\n  ✅ maw v${pkg.version} (${newHash}) — updated from ${ref}\n`);
+  } catch (e: any) {
+    console.error(`  ❌ Update failed: ${e.message}`);
+    process.exit(1);
+  }
 } else if (!cmd || cmd === "--help" || cmd === "-h") {
   usage();
 } else {
