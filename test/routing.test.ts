@@ -44,13 +44,13 @@ describe("resolveTarget", () => {
   // #1: LOCAL SESSION FOUND (bare name)
   test("bare name matches local session window", () => {
     const r = resolveTarget("mother-oracle", BASE_CONFIG, SESSIONS);
-    expect(r).toEqual({ type: "local", target: "13-mother:mother-oracle" });
+    expect(r).toEqual({ type: "local", target: "13-mother:1" });
   });
 
   // #2: LOCAL SESSION FOUND (session:window format)
   test("session:window format matches locally", () => {
     const r = resolveTarget("13-mother:mother-oracle", BASE_CONFIG, SESSIONS);
-    expect(r).toEqual({ type: "local", target: "13-mother:mother-oracle" });
+    expect(r).toEqual({ type: "local", target: "13-mother:1" });
   });
 
   // #3: NODE:AGENT → REMOTE PEER
@@ -62,7 +62,7 @@ describe("resolveTarget", () => {
   // #4: NODE:AGENT → SELF-NODE (local match exists)
   test("self-node prefix resolves locally", () => {
     const r = resolveTarget("white:mawjs", BASE_CONFIG, SESSIONS);
-    expect(r).toEqual({ type: "self-node", target: "08-mawjs:mawjs-oracle" });
+    expect(r).toEqual({ type: "self-node", target: "08-mawjs:1" });
   });
 
   // #5: NODE:AGENT → SELF-NODE (no local match)
