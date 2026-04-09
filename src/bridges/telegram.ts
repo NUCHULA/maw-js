@@ -36,31 +36,64 @@ export async function startTelegramBridge(): Promise<void> {
   bot = new Bot(tg.botToken);
   const mawPort = loadConfig().port || 3456;
 
+  // /start — welcome message
+  bot.command("start", (ctx) => ctx.reply(
+    "🌐 Maw Oracle Bot\n\n" +
+    "Commands:\n" +
+    "  hey <target> <message> — send to any oracle\n" +
+    "  /sessions — list all reachable oracles\n" +
+    "  /peek <target> — see oracle's screen\n\n" +
+    "Examples:\n" +
+    "  hey mawjs check the CI\n" +
+    "  hey oracle-world:mawjs status\n" +
+    "  hey mother hello\n" +
+    "  hey mba:homekeeper check vpn"
+  ));
+
+  // /sessions — list all reachable targets
+  bot.command("sessions", async (ctx) => {
+    if (tg.allowedUsers.length > 0 && !tg.allowedUsers.includes(ctx.from.id)) return;
+    try {
+      const res = await fetch(`http://127.0.0.1:${mawPort}/api/sessions`);
+      const sessions = await res.json() as any[];
+      const lines = sessions.map((s: any) => {
+        const wins = s.windows?.map((w: any) => w.name).join(", ") || "?";
+        const src = s.source === "local" ? "local" : s.source?.replace(/^https?:\/\//, "");
+        return `${s.name}: ${wins} [${src}]`;
+      });
+      await ctx.reply("📡 Sessions:\n\n" + lines.join("\n"));
+    } catch {
+      await ctx.reply("✗ maw unreachable");
+    }
+  });
+
+  // hey <target> <message> — route to any oracle
   bot.on("message:text", async (ctx) => {
-    // Security: allowlist check
     if (tg.allowedUsers.length > 0 && !tg.allowedUsers.includes(ctx.from.id)) return;
 
     const text = ctx.message.text;
 
-    // Parse "hey <agent> <message>" or "/<agent> <message>"
-    const heyMatch = text.match(/^(?:hey|\/)\s*(\S+)\s+([\s\S]+)/i);
-    if (!heyMatch) return; // not a maw command, ignore
+    // Parse "hey <agent> <message>" or direct "<agent> <message>"
+    const heyMatch = text.match(/^(?:hey\s+)?(\S+(?::\S+)?)\s+([\s\S]+)/i);
+    if (!heyMatch) return;
 
     const [, target, message] = heyMatch;
+    // Skip if target looks like a regular word (not an oracle name)
+    if (!/[-:]/.test(target) && !target.endsWith("-oracle") && target.length < 3) return;
 
     try {
       const res = await fetch(`http://127.0.0.1:${mawPort}/api/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ target, text: message.trim() }),
+        body: JSON.stringify({ target, text: `[telegram:nat] ${message.trim()}` }),
       });
       const data = await res.json() as any;
       if (data.ok) {
-        await ctx.reply(`✓ delivered → ${data.target || target}`);
+        await ctx.reply(`✓ → ${data.target || target}`);
       } else {
         await ctx.reply(`✗ ${data.error || "send failed"}`);
       }
-    } catch (e) {
+    } catch {
       await ctx.reply(`✗ maw unreachable`);
     }
   });
