@@ -31,12 +31,18 @@ if (cmd === "--version" || cmd === "-v") {
 } else if (cmd === "update" || cmd === "upgrade") {
   const pkg = require("../package.json");
   const { execSync } = require("child_process");
-  const ref = args[1] || "alpha"; // default: update from alpha
-  const repo = "Soul-Brews-Studio/maw-js";
+  const ref = args[1] || "alpha";
+  // Derive repo from git remote — works for any fork, not hardcoded
+  let repo = "";
+  try {
+    const remote = execSync("git remote get-url origin", { cwd: import.meta.dir, encoding: "utf-8" }).trim();
+    const m = remote.match(/github\.com[:/](.+?)(?:\.git)?$/);
+    repo = m?.[1] || "";
+  } catch {}
+  if (!repo) repo = pkg.repository?.url?.match(/github\.com\/(.+?)(?:\.git)?$/)?.[1] || "Soul-Brews-Studio/maw-js";
   console.log(`\n  🍺 Updating maw from github:${repo}#${ref}...\n`);
   try {
     execSync(`bun add -g github:${repo}#${ref}`, { stdio: "inherit" });
-    // Show new version
     let newHash = "";
     try { newHash = execSync("git rev-parse --short HEAD", { cwd: import.meta.dir }).toString().trim(); } catch {}
     console.log(`\n  ✅ maw v${pkg.version} (${newHash}) — updated from ${ref}\n`);
