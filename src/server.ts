@@ -82,6 +82,12 @@ export function startServer(port = +(process.env.MAW_PORT || loadConfig().port |
     startMqttBridge(feedListeners, feedBuffer);
   } catch {}
 
+  // Telegram bridge — grammy bot for human↔oracle messaging
+  try {
+    const { startTelegramBridge } = require("./bridges/telegram");
+    startTelegramBridge();
+  } catch {}
+
 
   const wsHandler = {
     open: (ws: any) => {
