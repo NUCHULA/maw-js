@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { readdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, existsSync } from "fs";
 import { join, basename } from "path";
 import { loadConfig, saveConfig, configForDisplay } from "../config";
-import { FLEET_DIR as fleetDir } from "../paths";
+import { FLEET_DIR as fleetDir, CONFIG_DIR, CONFIG_FILE } from "../paths";
 
 export const configApi = new Hono();
 
@@ -29,7 +29,7 @@ configApi.get("/config-file", (c) => {
   const filePath = c.req.query("path");
   if (!filePath) return c.json({ error: "path required" }, 400);
   if (filePath.includes("..")) return c.json({ error: "invalid path" }, 400);
-  const fullPath = join(import.meta.dir, "../..", filePath);
+  const fullPath = (filePath === "maw.config.json" ? CONFIG_FILE : join(CONFIG_DIR, filePath));
   if (!existsSync(fullPath)) return c.json({ error: "not found" }, 404);
   try {
     const content = readFileSync(fullPath, "utf-8");
@@ -57,7 +57,7 @@ configApi.post("/config-file", async (c) => {
   try {
     const { content } = await c.req.json();
     JSON.parse(content); // validate JSON
-    const fullPath = join(import.meta.dir, "../..", filePath);
+    const fullPath = (filePath === "maw.config.json" ? CONFIG_FILE : join(CONFIG_DIR, filePath));
     if (filePath === "maw.config.json") {
       // Handle masked env values
       const parsed = JSON.parse(content);
@@ -81,7 +81,7 @@ configApi.post("/config-file", async (c) => {
 configApi.post("/config-file/toggle", async (c) => {
   const filePath = c.req.query("path");
   if (!filePath || !filePath.startsWith("fleet/")) return c.json({ error: "invalid path" }, 400);
-  const fullPath = join(import.meta.dir, "../..", filePath);
+  const fullPath = (filePath === "maw.config.json" ? CONFIG_FILE : join(CONFIG_DIR, filePath));
   if (!existsSync(fullPath)) return c.json({ error: "not found" }, 404);
   const isDisabled = filePath.endsWith(".disabled");
   const newPath = isDisabled ? fullPath.replace(/\.disabled$/, "") : fullPath + ".disabled";
@@ -94,7 +94,7 @@ configApi.post("/config-file/toggle", async (c) => {
 configApi.delete("/config-file", async (c) => {
   const filePath = c.req.query("path");
   if (!filePath || !filePath.startsWith("fleet/")) return c.json({ error: "cannot delete" }, 400);
-  const fullPath = join(import.meta.dir, "../..", filePath);
+  const fullPath = (filePath === "maw.config.json" ? CONFIG_FILE : join(CONFIG_DIR, filePath));
   if (!existsSync(fullPath)) return c.json({ error: "not found" }, 404);
   unlinkSync(fullPath);
   return c.json({ ok: true });
