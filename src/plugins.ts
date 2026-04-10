@@ -21,10 +21,24 @@ export interface MawHooks {
   filter(event: FeedEventType | "*", fn: Filter): void;
 }
 
+export interface PluginInfo {
+  name: string;
+  type: "ts" | "js" | "wasm-shared" | "wasm-wasi" | "unknown";
+  loadedAt: string;
+  events: number;
+  errors: number;
+  lastEvent?: string;
+  lastError?: string;
+}
+
 export class PluginSystem {
   private handlers = new Map<string, Handler[]>();
   private filters = new Map<string, Filter[]>();
   private teardowns: Array<() => void> = [];
+  private _plugins: PluginInfo[] = [];
+  private _totalEvents = 0;
+  private _totalErrors = 0;
+  private _startedAt = new Date().toISOString();
 
   readonly hooks: MawHooks = {
     on: (event, fn) => {
@@ -40,14 +54,18 @@ export class PluginSystem {
   };
 
   async emit(event: FeedEvent) {
+    this._totalEvents++;
+
     // Phase 1: FILTER — modify event before handlers (Drupal hook_alter)
     for (const fn of this.filters.get(event.event) ?? []) {
       try { event = fn(event); } catch (err) {
+        this._totalErrors++;
         console.error(`[plugin:filter] ${event.event}:`, (err as Error).message);
       }
     }
     for (const fn of this.filters.get("*") ?? []) {
       try { event = fn(event); } catch (err) {
+        this._totalErrors++;
         console.error(`[plugin:filter] *:`, (err as Error).message);
       }
     }
@@ -55,19 +73,42 @@ export class PluginSystem {
     // Phase 2: HANDLE — observe/act on (filtered) event
     for (const fn of this.handlers.get(event.event) ?? []) {
       try { await fn(event); } catch (err) {
+        this._totalErrors++;
         console.error(`[plugin] ${event.event}:`, (err as Error).message);
       }
     }
     for (const fn of this.handlers.get("*") ?? []) {
       try { await fn(event); } catch (err) {
+        this._totalErrors++;
         console.error(`[plugin] *:`, (err as Error).message);
       }
+    }
+
+    // Update per-plugin stats
+    for (const p of this._plugins) {
+      p.events = this._totalEvents;
+      p.lastEvent = event.event;
     }
   }
 
   load(plugin: MawPlugin) {
     const teardown = plugin(this.hooks);
     if (typeof teardown === "function") this.teardowns.push(teardown);
+  }
+
+  register(name: string, type: PluginInfo["type"]) {
+    this._plugins.push({ name, type, loadedAt: new Date().toISOString(), events: 0, errors: 0 });
+  }
+
+  stats() {
+    return {
+      startedAt: this._startedAt,
+      plugins: this._plugins,
+      totalEvents: this._totalEvents,
+      totalErrors: this._totalErrors,
+      handlers: Object.fromEntries([...this.handlers].map(([k, v]) => [k, v.length])),
+      filters: Object.fromEntries([...this.filters].map(([k, v]) => [k, v.length])),
+    };
   }
 
   destroy() {
@@ -106,6 +147,7 @@ async function loadWasmPlugin(system: PluginSystem, path: string, filename: stri
         handle(0, json.length);
       });
     });
+    system.register(filename, "wasm-shared");
     console.log(`[plugin] loaded wasm: ${filename} (shared memory)`);
     return;
   }
@@ -144,6 +186,7 @@ async function loadWasmPlugin(system: PluginSystem, path: string, filename: stri
         } catch {}
       });
     });
+    system.register(filename, "wasm-wasi");
     console.log(`[plugin] loaded wasm: ${filename} (WASI)`);
     return;
   }
@@ -180,6 +223,7 @@ export async function loadPlugins(system: PluginSystem, dir: string) {
         const plugin = mod.default ?? mod;
         if (typeof plugin === "function") {
           system.load(plugin);
+          system.register(file, file.endsWith(".ts") ? "ts" : "js");
           console.log(`[plugin] loaded: ${file}`);
         }
       }

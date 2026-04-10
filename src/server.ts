@@ -112,6 +112,9 @@ export function startServer(port = +(process.env.MAW_PORT || loadConfig().port |
     const plugins = new PluginSystem();
     loadPlugins(plugins, join(homedir(), ".oracle", "plugins"));
     feedListeners.add((event: any) => plugins.emit(event));
+
+    // Plugin debug API
+    app.get("/api/plugins", (c: any) => c.json(plugins.stats()));
   } catch (err) {
     console.error("[plugins] failed to init:", err);
   }
