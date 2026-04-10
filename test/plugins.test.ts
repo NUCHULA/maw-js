@@ -95,6 +95,54 @@ describe("PluginSystem", () => {
     expect(tornDown).toBe(true);
   });
 
+  test("filter modifies event before handlers see it", async () => {
+    const sys = new PluginSystem();
+    const received: string[] = [];
+
+    sys.load((hooks) => {
+      hooks.filter("*", (e) => ({ ...e, message: "REDACTED" }));
+    });
+    sys.load((hooks) => {
+      hooks.on("SessionStart", (e) => received.push(e.message));
+    });
+
+    await sys.emit(mockEvent);
+    expect(received).toEqual(["REDACTED"]);
+  });
+
+  test("multiple filters chain in order", async () => {
+    const sys = new PluginSystem();
+    const received: string[] = [];
+
+    sys.load((hooks) => {
+      hooks.filter("*", (e) => ({ ...e, message: e.message + " [hashed]" }));
+    });
+    sys.load((hooks) => {
+      hooks.filter("*", (e) => ({ ...e, message: e.message + " [signed]" }));
+    });
+    sys.load((hooks) => {
+      hooks.on("SessionStart", (e) => received.push(e.message));
+    });
+
+    await sys.emit(mockEvent);
+    expect(received).toEqual(["Session started [hashed] [signed]"]);
+  });
+
+  test("filter error does not crash handlers", async () => {
+    const sys = new PluginSystem();
+    const received: string[] = [];
+
+    sys.load((hooks) => {
+      hooks.filter("*", () => { throw new Error("filter boom"); });
+    });
+    sys.load((hooks) => {
+      hooks.on("SessionStart", (e) => received.push(e.oracle));
+    });
+
+    await sys.emit(mockEvent);
+    expect(received).toEqual(["neo"]);
+  });
+
   test("loadPlugins skips non-plugin wasm files", async () => {
     const sys = new PluginSystem();
     // ~/.oracle/plugins/ has demo.wasm (add/mul) — should skip gracefully

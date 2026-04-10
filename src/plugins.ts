@@ -13,14 +13,17 @@
 import type { FeedEvent, FeedEventType } from "./lib/feed";
 
 type Handler = (event: FeedEvent) => void | Promise<void>;
+type Filter = (event: FeedEvent) => FeedEvent;
 export type MawPlugin = (hooks: MawHooks) => void | (() => void);
 
 export interface MawHooks {
   on(event: FeedEventType | "*", fn: Handler): void;
+  filter(event: FeedEventType | "*", fn: Filter): void;
 }
 
 export class PluginSystem {
   private handlers = new Map<string, Handler[]>();
+  private filters = new Map<string, Filter[]>();
   private teardowns: Array<() => void> = [];
 
   readonly hooks: MawHooks = {
@@ -29,9 +32,27 @@ export class PluginSystem {
       if (list) list.push(fn);
       else this.handlers.set(event, [fn]);
     },
+    filter: (event, fn) => {
+      const list = this.filters.get(event);
+      if (list) list.push(fn);
+      else this.filters.set(event, [fn]);
+    },
   };
 
   async emit(event: FeedEvent) {
+    // Phase 1: FILTER — modify event before handlers (Drupal hook_alter)
+    for (const fn of this.filters.get(event.event) ?? []) {
+      try { event = fn(event); } catch (err) {
+        console.error(`[plugin:filter] ${event.event}:`, (err as Error).message);
+      }
+    }
+    for (const fn of this.filters.get("*") ?? []) {
+      try { event = fn(event); } catch (err) {
+        console.error(`[plugin:filter] *:`, (err as Error).message);
+      }
+    }
+
+    // Phase 2: HANDLE — observe/act on (filtered) event
     for (const fn of this.handlers.get(event.event) ?? []) {
       try { await fn(event); } catch (err) {
         console.error(`[plugin] ${event.event}:`, (err as Error).message);
