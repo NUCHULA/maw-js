@@ -164,8 +164,8 @@ export async function cmdSend(query: string, message: string, force = false) {
     }
     await sendKeys(target, message);
     await runHook("after_send", { to: query, message });
-    const agentName = process.env.CLAUDE_AGENT_NAME || query.split(":").pop() || "cli";
-    logMessage(agentName, query, message, "local");
+    const senderName = process.env.CLAUDE_AGENT_NAME || config.node || "cli";
+    logMessage(senderName, query, message, "local");
     await Bun.sleep(150);
     let lastLine = "";
     try { const content = await capture(target, 3); lastLine = content.split("\n").filter(l => l.trim()).pop() || ""; } catch {}
