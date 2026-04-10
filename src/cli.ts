@@ -9,6 +9,7 @@ import { routeAgent } from "./cli/route-agent";
 import { routeFleet } from "./cli/route-fleet";
 import { routeWorkspace } from "./cli/route-workspace";
 import { routeTools } from "./cli/route-tools";
+import { routeTeam } from "./cli/route-team";
 
 const args = process.argv.slice(2);
 const cmd = args[0]?.toLowerCase();
@@ -35,6 +36,7 @@ if (cmd === "--version" || cmd === "-v") {
     await routeAgent(cmd, args) ||
     await routeFleet(cmd, args) ||
     await routeWorkspace(cmd, args) ||
+    await routeTeam(cmd, args) ||
     await routeTools(cmd, args);
 
   if (!handled) {
