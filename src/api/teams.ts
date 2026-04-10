@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { readFileSync, readdirSync, rmSync, existsSync } from "fs";
 import { join } from "path";
 import { scanTeams } from "../engine/teams";
-import { sanitizeName, normalizeMember, loadTeamConfig, saveTeamConfig, saveTask, loadTask, teamDir, tasksDir } from "../commands/team";
+import { sanitizeName, normalizeMember, loadTeamConfig, saveTeamConfig, saveTask, loadTask, teamDir, tasksDir, dispatchTask } from "../commands/team";
 
 export const teamsApi = new Hono();
 
@@ -77,6 +77,9 @@ teamsApi.post("/teams/:name/tasks", async (c) => {
       createdAt: Date.now(),
     };
     saveTask(name, task);
+    if (task.owner) {
+      dispatchTask(name, task).catch(() => {});
+    }
     return c.json({ ok: true, task }, 201);
   } catch (e: any) { return c.json({ error: e.message }, 400); }
 });
@@ -92,5 +95,17 @@ teamsApi.patch("/teams/:name/tasks/:id", async (c) => {
     if (body.owner !== undefined) task.owner = body.owner;
     saveTask(name, task);
     return c.json({ ok: true, task });
+  } catch (e: any) { return c.json({ error: e.message }, 400); }
+});
+
+teamsApi.post("/teams/:name/tasks/:id/dispatch", async (c) => {
+  try {
+    const name = c.req.param("name");
+    const id = c.req.param("id");
+    const task = loadTask(name, id);
+    if (!task) return c.json({ error: "task not found" }, 404);
+    if (!task.owner) return c.json({ error: "task has no owner — assign first" }, 400);
+    const ok = await dispatchTask(name, task);
+    return c.json({ ok, task });
   } catch (e: any) { return c.json({ error: e.message }, 400); }
 });

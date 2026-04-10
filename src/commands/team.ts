@@ -1,7 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync } from "fs";
 import { join, resolve } from "path";
-import { homedir } from "os";
+import { homedir, hostname } from "os";
 import { scanTeams } from "../engine/teams";
+import { pushFeedEvent } from "../api/feed";
+import type { FeedEvent } from "../lib/feed";
 
 const TEAMS_DIR = join(homedir(), ".claude/teams");
 const TASKS_DIR = join(homedir(), ".claude/tasks");
@@ -150,6 +152,43 @@ export async function cmdTeamDelete(name: string) {
   console.log(`\x1b[32m\u2713\x1b[0m team \x1b[33m${name}\x1b[0m deleted`);
 }
 
+/** Dispatch a task to an agent: wake + send + set in_progress + log feed */
+export async function dispatchTask(teamName: string, task: TaskData): Promise<boolean> {
+  if (!task.owner) return false;
+  const agent = task.owner;
+  try {
+    // Lazy import to avoid circular deps in CLI-only mode
+    const { cmdWake } = await import("./wake");
+    const { cmdSend } = await import("./comm");
+
+    console.log(`\x1b[36m\u21bb\x1b[0m waking \x1b[33m${agent}\x1b[0m ...`);
+    await cmdWake(agent, {});
+
+    console.log(`\x1b[36m\u21bb\x1b[0m sending task to \x1b[33m${agent}\x1b[0m ...`);
+    await cmdSend(agent, `[task:${task.id}] ${task.subject}`, true);
+
+    task.status = "in_progress";
+    saveTask(teamName, task);
+
+    pushFeedEvent({
+      timestamp: new Date().toISOString(),
+      oracle: agent,
+      host: hostname(),
+      event: "Notification",
+      project: teamName,
+      sessionId: task.id,
+      message: `Task dispatched: "${task.subject}" → ${agent}`,
+      ts: Date.now(),
+    });
+
+    console.log(`\x1b[32m\u2713\x1b[0m dispatched to \x1b[33m${agent}\x1b[0m \u2014 status \u2192 in_progress`);
+    return true;
+  } catch (e: any) {
+    console.error(`\x1b[31m\u2717\x1b[0m dispatch to \x1b[33m${agent}\x1b[0m failed: ${e.message}`);
+    return false;
+  }
+}
+
 export async function cmdTeamTaskAdd(teamName: string, subject: string, opts: { assign?: string }) {
   const config = loadTeamConfig(teamName);
   if (!config) {
@@ -165,6 +204,10 @@ export async function cmdTeamTaskAdd(teamName: string, subject: string, opts: { 
   };
   saveTask(teamName, task);
   console.log(`\x1b[32m\u2713\x1b[0m task \x1b[33m${task.id}\x1b[0m added to \x1b[33m${teamName}\x1b[0m${opts.assign ? ` (assigned: ${opts.assign})` : ""}`);
+
+  if (opts.assign) {
+    await dispatchTask(teamName, task);
+  }
 }
 
 export async function cmdTeamTaskUpdate(teamName: string, taskId: string, status: string) {
