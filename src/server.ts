@@ -79,9 +79,10 @@ export function startServer(port = +(process.env.MAW_PORT || loadConfig().port |
   // MQTT publish — broadcast feed events to configurable broker (subscribe via CF Worker bridge)
   try {
     const { mqttPublish } = require("./mqtt-publish");
-    const node = loadConfig().node ?? "local";
+    const node = loadConfig().node;
+    if (!node) throw new Error("config.node is required for MQTT publish");
     feedListeners.add((event) => {
-      const oracle = event.oracle || "unknown";
+      const oracle = event.oracle;
       mqttPublish(`maw/v1/oracle/${oracle}/feed`, event);
       mqttPublish(`maw/v1/node/${node}/feed`, event);
     });

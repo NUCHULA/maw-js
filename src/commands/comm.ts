@@ -14,8 +14,8 @@ import { join } from "path";
 /** Log message to ~/.oracle/maw-log.jsonl with normalized from/to */
 async function logMessage(from: string, to: string, msg: string, route: string) {
   const config = loadConfig();
-  const node = config.node ?? "local";
-  const normalizedFrom = from.includes(":") ? from : `${node}:${from}`;
+  if (!config.node) throw new Error("config.node is required — set 'node' in maw.config.json");
+  const normalizedFrom = from.includes(":") ? from : `${config.node}:${from}`;
   const logDir = join(homedir(), ".oracle");
   const line = JSON.stringify({
     ts: new Date().toISOString(),
@@ -164,7 +164,8 @@ export async function cmdSend(query: string, message: string, force = false) {
     }
     await sendKeys(target, message);
     await runHook("after_send", { to: query, message });
-    const senderName = process.env.CLAUDE_AGENT_NAME || config.node || "cli";
+    if (!config.node) throw new Error("config.node is required — set 'node' in maw.config.json");
+    const senderName = process.env.CLAUDE_AGENT_NAME || config.node;
     logMessage(senderName, query, message, "local");
     await Bun.sleep(150);
     let lastLine = "";
@@ -181,7 +182,7 @@ export async function cmdSend(query: string, message: string, force = false) {
       body: JSON.stringify({ target: result.target, text: message }),
     });
     if (res.ok && res.data?.ok) {
-      const agentName = process.env.CLAUDE_AGENT_NAME || "cli";
+      const agentName = process.env.CLAUDE_AGENT_NAME || config.node;
       logMessage(agentName, query, message, `peer:${result.node}`);
       console.log(`\x1b[32mdelivered\x1b[0m ⚡ ${result.node} → ${res.data.target || result.target}: ${message}`);
       if (res.data.lastLine) console.log(`\x1b[90m  ⤷ ${res.data.lastLine.slice(0, cfgLimit("messageTruncate"))}\x1b[0m`);
