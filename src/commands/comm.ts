@@ -167,6 +167,11 @@ export async function cmdSend(query: string, message: string, force = false) {
     if (!config.node) throw new Error("config.node is required — set 'node' in maw.config.json");
     const senderName = process.env.CLAUDE_AGENT_NAME || config.node;
     logMessage(senderName, query, message, "local");
+    fetch(`http://localhost:${config.port || 3456}/api/feed`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event: "MessageSend", oracle: senderName, host: config.node, message: `${query}: ${message.slice(0, 200)}` }),
+    }).catch(() => {});
     await Bun.sleep(150);
     let lastLine = "";
     try { const content = await capture(target, 3); lastLine = content.split("\n").filter(l => l.trim()).pop() || ""; } catch {}
@@ -184,6 +189,11 @@ export async function cmdSend(query: string, message: string, force = false) {
     if (res.ok && res.data?.ok) {
       const agentName = process.env.CLAUDE_AGENT_NAME || config.node;
       logMessage(agentName, query, message, `peer:${result.node}`);
+      fetch(`http://localhost:${config.port || 3456}/api/feed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event: "MessageSend", oracle: agentName, host: config.node, message: `${result.node}:${query}: ${message.slice(0, 200)}` }),
+      }).catch(() => {});
       console.log(`\x1b[32mdelivered\x1b[0m ⚡ ${result.node} → ${res.data.target || result.target}: ${message}`);
       if (res.data.lastLine) console.log(`\x1b[90m  ⤷ ${res.data.lastLine.slice(0, cfgLimit("messageTruncate"))}\x1b[0m`);
       await runHook("after_send", { to: query, message });
