@@ -80,7 +80,7 @@ export function startServer(port = +(process.env.MAW_PORT || loadConfig().port |
   try {
     const { mqttPublish } = require("./mqtt-publish");
     const node = loadConfig().node ?? "local";
-    feedListeners.add((event: any) => {
+    feedListeners.add((event) => {
       const oracle = event.oracle || "unknown";
       mqttPublish(`maw/v1/oracle/${oracle}/feed`, event);
       mqttPublish(`maw/v1/node/${node}/feed`, event);
@@ -90,7 +90,7 @@ export function startServer(port = +(process.env.MAW_PORT || loadConfig().port |
   // Shell hooks — fire configured ~/.oracle/maw.hooks.json scripts on feed events
   try {
     const { runHook } = require("./hooks");
-    feedListeners.add((event: any) => {
+    feedListeners.add((event) => {
       runHook(event.event, {
         from: event.oracle,
         to: event.oracle,
@@ -111,10 +111,10 @@ export function startServer(port = +(process.env.MAW_PORT || loadConfig().port |
     const { join } = require("path");
     const plugins = new PluginSystem();
     loadPlugins(plugins, join(homedir(), ".oracle", "plugins"));
-    feedListeners.add((event: any) => plugins.emit(event));
+    feedListeners.add((event) => plugins.emit(event));
 
     // Plugin debug API
-    app.get("/api/plugins", (c: any) => c.json(plugins.stats()));
+    app.get("/api/plugins", (c) => c.json(plugins.stats()));
 
     // Plugin debug page (Hono JSX)
     const { pluginsView } = require("./views/plugins");

@@ -25,7 +25,7 @@ export function pluginsView(plugins: PluginSystem) {
             <div class="stat"><div class="n">{s.plugins.length}</div><div class="l">Plugins</div></div>
             <div class="stat"><div class="n pulse">{s.totalEvents}</div><div class="l">Events</div></div>
             <div class="stat"><div class={s.totalErrors > 0 ? "n err" : "n ok"}>{s.totalErrors}</div><div class="l">Errors</div></div>
-            <div class="stat"><div class={(s as any).gated > 0 ? "n err" : "n ok"}>{(s as any).gated || 0}</div><div class="l">Gated</div></div>
+            <div class="stat"><div class={s.gated > 0 ? "n err" : "n ok"}>{s.gated || 0}</div><div class="l">Gated</div></div>
             <div class="stat"><div class="n">{upStr}</div><div class="l">Uptime</div></div>
           </div>
 
@@ -44,10 +44,10 @@ export function pluginsView(plugins: PluginSystem) {
           </table>
 
           {[
-            { label: "Gates (Phase 0)", data: (s as any).gates || {} },
+            { label: "Gates (Phase 0)", data: s.gates || {} },
             { label: "Filters (Phase 1)", data: s.filters || {} },
             { label: "Handlers (Phase 2)", data: s.handlers || {} },
-            { label: "Lates (Phase 3)", data: (s as any).lates || {} },
+            { label: "Lates (Phase 3)", data: s.lates || {} },
           ].filter(p => Object.keys(p.data).length > 0).map(phase => (
             <div class="hook">
               <h3>{phase.label}</h3>
