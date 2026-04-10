@@ -1,10 +1,27 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync } from "fs";
-import { join } from "path";
+import { join, resolve } from "path";
 import { homedir } from "os";
 import { scanTeams } from "../engine/teams";
 
 const TEAMS_DIR = join(homedir(), ".claude/teams");
 const TASKS_DIR = join(homedir(), ".claude/tasks");
+
+/** Validate and sanitize team/task name — reject path traversal */
+export function sanitizeName(name: string): string {
+  if (!name || typeof name !== "string") throw new Error("name is required");
+  if (/[\/\\]|\.\./.test(name)) throw new Error("invalid name: must not contain / \\ or ..");
+  const trimmed = name.trim();
+  if (!trimmed || trimmed.length > 100) throw new Error("invalid name: empty or too long");
+  return trimmed;
+}
+
+/** Assert resolved path is inside expected base dir */
+function assertInsideDir(base: string, target: string): void {
+  const resolved = resolve(target);
+  if (!resolved.startsWith(resolve(base) + "/") && resolved !== resolve(base)) {
+    throw new Error(`path escape detected: ${resolved} is outside ${base}`);
+  }
+}
 
 interface TeamConfig {
   name: string;
@@ -33,9 +50,9 @@ interface TaskData {
   createdAt: number;
 }
 
-function teamDir(name: string) { return join(TEAMS_DIR, name); }
+export function teamDir(name: string) { const d = join(TEAMS_DIR, sanitizeName(name)); assertInsideDir(TEAMS_DIR, d); return d; }
 function teamConfigPath(name: string) { return join(teamDir(name), "config.json"); }
-function tasksDir(name: string) { return join(TASKS_DIR, name); }
+export function tasksDir(name: string) { const d = join(TASKS_DIR, sanitizeName(name)); assertInsideDir(TASKS_DIR, d); return d; }
 
 export function loadTeamConfig(name: string): TeamConfig | null {
   const p = teamConfigPath(name);
@@ -50,14 +67,35 @@ export function saveTeamConfig(config: TeamConfig): void {
   writeFileSync(teamConfigPath(config.name), JSON.stringify(config, null, 2) + "\n");
 }
 
+/** Normalize member input — accepts string name or partial object */
+export function normalizeMember(m: any): TeamMember {
+  const name = typeof m === "string" ? m : String(m?.name ?? "");
+  if (!name) throw new Error("member name is required");
+  return {
+    name,
+    color: typeof m?.color === "string" ? m.color : null,
+    backendType: typeof m?.backendType === "string" ? m.backendType : "tmux",
+    isActive: typeof m?.isActive === "boolean" ? m.isActive : null,
+    tmuxPaneId: typeof m?.tmuxPaneId === "string" ? m.tmuxPaneId : "",
+    model: typeof m?.model === "string" ? m.model : "",
+    cwd: typeof m?.cwd === "string" ? m.cwd : undefined,
+    agentType: typeof m?.agentType === "string" ? m.agentType : undefined,
+    joinedAt: typeof m?.joinedAt === "number" ? m.joinedAt : Date.now(),
+  };
+}
+
 export function saveTask(teamName: string, task: TaskData): void {
   const dir = tasksDir(teamName);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, `${task.id}.json`), JSON.stringify(task, null, 2) + "\n");
+  const taskPath = join(dir, `${sanitizeName(task.id)}.json`);
+  assertInsideDir(dir, taskPath);
+  writeFileSync(taskPath, JSON.stringify(task, null, 2) + "\n");
 }
 
 export function loadTask(teamName: string, taskId: string): TaskData | null {
-  const p = join(tasksDir(teamName), `${taskId}.json`);
+  const dir = tasksDir(teamName);
+  const p = join(dir, `${sanitizeName(taskId)}.json`);
+  assertInsideDir(dir, p);
   if (!existsSync(p)) return null;
   try { return JSON.parse(readFileSync(p, "utf-8")); }
   catch { return null; }
@@ -74,15 +112,7 @@ export async function cmdTeamCreate(name: string, opts: { members?: string[]; de
     console.error(`\x1b[31m\u2717\x1b[0m team \x1b[33m${name}\x1b[0m already exists`);
     process.exit(1);
   }
-  const members: TeamMember[] = (opts.members || []).map(m => ({
-    name: m,
-    color: null,
-    backendType: "tmux",
-    isActive: null,
-    tmuxPaneId: "",
-    model: "",
-    joinedAt: Date.now(),
-  }));
+  const members: TeamMember[] = (opts.members || []).map(m => normalizeMember(m));
   const config: TeamConfig = {
     name,
     description: opts.desc || "",
