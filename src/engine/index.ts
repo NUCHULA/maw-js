@@ -2,7 +2,8 @@ import { tmux } from "../tmux";
 import { registerBuiltinHandlers } from "../handlers";
 import { pushCapture, pushPreviews, broadcastSessions, sendBusyAgents } from "./capture";
 import { StatusDetector } from "./status";
-import { broadcastTeams } from "./teams";
+import { broadcastTeams, scanTeams } from "./teams";
+import { handleTaskAutomation } from "./task-automation";
 import { getAggregatedSessions, getPeers } from "../peers";
 import { loadConfig, buildCommand, cfgInterval, cfgLimit } from "../config";
 import type { FeedEvent } from "../lib/feed";
@@ -105,6 +106,8 @@ export class MawEngine {
     };
     sendInitialSessions().catch(() => {});
     ws.send(JSON.stringify({ type: "feed-history", events: this.feedBuffer.slice(-cfgLimit("feedHistory")) }));
+    // Send initial teams data to new client
+    scanTeams().then(teams => { if (teams.length > 0) ws.send(JSON.stringify({ type: "teams", teams })); }).catch(() => {});
   }
 
   handleMessage(ws: MawWS, msg: string | Buffer) {
@@ -182,7 +185,14 @@ export class MawEngine {
       for (const ws of this.clients) ws.send(msg);
     };
     this.feedListeners.add(listener);
-    this.feedUnsub = () => this.feedListeners.delete(listener);
+
+    // Task automation: auto-complete on Stop + chain to next pending
+    this.feedListeners.add(handleTaskAutomation);
+
+    this.feedUnsub = () => {
+      this.feedListeners.delete(listener);
+      this.feedListeners.delete(handleTaskAutomation);
+    };
   }
 
   private stopIntervals() {
