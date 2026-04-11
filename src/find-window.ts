@@ -82,7 +82,7 @@ export function findWindow(sessions: Session[], query: string): string | null {
   // falls through to federation routing (node:agent like "oracle-world:mawjs").
   if (query.includes(":")) {
     const [sessPart] = query.toLowerCase().split(":", 2);
-    const sessExists = matchSession(sessions, sessPart);
+    const sessExists = matchSession(sessions, sessPart, true);
     return sessExists ? query : null;
   }
   return null;
