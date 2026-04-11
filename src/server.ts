@@ -133,7 +133,8 @@ export async function startServer(port = +(process.env.MAW_PORT || loadConfig().
   // Security: bind to localhost unless peers are configured (federation needs network access)
   const config = loadConfig();
   const hasPeers = (config.peers?.length ?? 0) > 0 || (config.namedPeers?.length ?? 0) > 0;
-  const hostname = hasPeers ? "0.0.0.0" : "127.0.0.1";
+  // NUCHULA: always bind 0.0.0.0 — Mac accesses via LAN (192.168.1.125:3456)
+  const hostname = "0.0.0.0";
 
   if (hasPeers && !config.federationToken) {
     console.warn(`\x1b[31m⚠ WARNING: peers configured but no federationToken set!\x1b[0m`);
