@@ -34,17 +34,17 @@ const MOCK_SESSIONS: Session[] = [
 
 describe("findWindow", () => {
   test("finds by window name substring", () => {
-    expect(findWindow(MOCK_SESSIONS, "neo")).toBe("1-oracles:neo-oracle");
+    expect(findWindow(MOCK_SESSIONS, "neo")).toBe("1-oracles:0");
   });
 
   test("finds case-insensitive", () => {
-    expect(findWindow(MOCK_SESSIONS, "NEO")).toBe("1-oracles:neo-oracle");
-    expect(findWindow(MOCK_SESSIONS, "Pulse")).toBe("1-oracles:pulse-oracle");
+    expect(findWindow(MOCK_SESSIONS, "NEO")).toBe("1-oracles:0");
+    expect(findWindow(MOCK_SESSIONS, "Pulse")).toBe("1-oracles:1");
   });
 
   test("finds across sessions", () => {
-    expect(findWindow(MOCK_SESSIONS, "claude")).toBe("0:claude");
-    expect(findWindow(MOCK_SESSIONS, "xiaoer")).toBe("3-brewing:xiaoer");
+    expect(findWindow(MOCK_SESSIONS, "claude")).toBe("0:0");
+    expect(findWindow(MOCK_SESSIONS, "xiaoer")).toBe("3-brewing:0");
   });
 
   test("returns null for no match", () => {
@@ -56,12 +56,12 @@ describe("findWindow", () => {
   });
 
   test("partial match works", () => {
-    expect(findWindow(MOCK_SESSIONS, "herm")).toBe("1-oracles:hermes-oracle");
+    expect(findWindow(MOCK_SESSIONS, "herm")).toBe("1-oracles:2");
   });
 
   test("returns first match when multiple match", () => {
     // "oracle" matches all in 1-oracles session
-    expect(findWindow(MOCK_SESSIONS, "oracle")).toBe("1-oracles:neo-oracle");
+    expect(findWindow(MOCK_SESSIONS, "oracle")).toBe("1-oracles:0");
   });
 
   describe("session:window syntax (#186)", () => {
@@ -80,44 +80,46 @@ describe("findWindow", () => {
 
     test("full session name + full window name", () => {
       expect(findWindow(MAW_SESSIONS, "08-mawjs:mawjs-oracle"))
-        .toBe("08-mawjs:mawjs-oracle");
+        .toBe("08-mawjs:1");
     });
 
     test("oracle short name resolves to NN-prefixed session, not substring collision", () => {
       // 'mawjs' must NOT route to 'mawjs-view' — it should hit '08-mawjs'
       // because 'mawjs' is the oracle-name match (08-mawjs strip → mawjs).
       expect(findWindow(MAW_SESSIONS, "mawjs:mawjs-oracle"))
-        .toBe("08-mawjs:mawjs-oracle");
+        .toBe("08-mawjs:1");
     });
 
     test("oracle short name + window short name", () => {
       // 'mawjs:dev' → 08-mawjs:mawjs-dev (substring on window)
       expect(findWindow(MAW_SESSIONS, "mawjs:dev"))
-        .toBe("08-mawjs:mawjs-dev");
+        .toBe("08-mawjs:2");
     });
 
     test("short name targets 13-mother not other sessions", () => {
       expect(findWindow(MAW_SESSIONS, "mother:mother-oracle"))
-        .toBe("13-mother:mother-oracle");
+        .toBe("13-mother:1");
     });
 
     test("empty window part returns session's first window", () => {
       expect(findWindow(MAW_SESSIONS, "08-mawjs:"))
-        .toBe("08-mawjs:mawjs-oracle");
+        .toBe("08-mawjs:1");
     });
 
     test("exact session name beats oracle-name match", () => {
       // 'mawjs-view' is an exact session name; should match it directly,
       // not 08-mawjs (which would be the oracle-name match for 'mawjs').
       expect(findWindow(MAW_SESSIONS, "mawjs-view:mawjs-oracle"))
-        .toBe("mawjs-view:mawjs-oracle");
+        .toBe("mawjs-view:1");
     });
 
-    test("falls through to legacy logic when session part doesn't match", () => {
-      // 'nosession:foo' → matchSession returns null → fall through →
-      // legacy step 3 returns query as-is (preserves old behavior).
+    test("returns null when session part doesn't match (enables federation fallback)", () => {
+      // 'nosession:foo' → matchSession returns null → no local session →
+      // return null so cmdSend falls through to node-prefix federation routing.
+      // This is the fix for #176/#177 — "oracle-world:mawjs" was being returned
+      // as a local target, bypassing federation.
       expect(findWindow(MAW_SESSIONS, "nosession:foo"))
-        .toBe("nosession:foo");
+        .toBeNull();
     });
 
     test("falls through when session matches but window part doesn't", () => {
