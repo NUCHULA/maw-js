@@ -32,8 +32,20 @@ interface TeamConfig {
   createdAt?: number;
 }
 
+/** Validate team name — reject path traversal and special chars */
+export function validateTeamName(name: string): string {
+  if (!name || typeof name !== "string") throw new Error("team name is required");
+  const trimmed = name.trim();
+  if (!(/^[a-zA-Z0-9_-]+$/.test(trimmed))) {
+    throw new Error(`invalid team name: "${trimmed}" — only a-z, 0-9, _ and - allowed`);
+  }
+  if (trimmed.length > 100) throw new Error("team name too long (max 100)");
+  return trimmed;
+}
+
 export function loadTeam(name: string): TeamConfig | null {
-  const configPath = join(TEAMS_DIR, name, "config.json");
+  const safeName = validateTeamName(name);
+  const configPath = join(TEAMS_DIR, safeName, "config.json");
   if (!existsSync(configPath)) return null;
   try { return JSON.parse(readFileSync(configPath, "utf-8")); }
   catch { return null; }
@@ -133,8 +145,9 @@ export async function cmdTeamShutdown(name: string, opts: { force?: boolean } = 
 }
 
 function cleanupTeamDir(name: string) {
-  const teamDir = join(TEAMS_DIR, name);
-  const tasksDir = join(TASKS_DIR, name);
+  const safeName = validateTeamName(name);
+  const teamDir = join(TEAMS_DIR, safeName);
+  const tasksDir = join(TASKS_DIR, safeName);
   if (existsSync(teamDir)) { try { rmSync(teamDir, { recursive: true }); } catch {} }
   if (existsSync(tasksDir)) { try { rmSync(tasksDir, { recursive: true }); } catch {} }
 }
