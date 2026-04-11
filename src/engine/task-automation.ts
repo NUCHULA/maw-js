@@ -232,6 +232,19 @@ function publishMqttAlert(message: string): void {
   }
 }
 
+/** Call record-learning.sh to append learning to agent's CLAUDE.md */
+function recordLearning(agent: string, learning: string): void {
+  try {
+    const { execSync } = require("child_process");
+    const date = new Date().toISOString().slice(0, 10);
+    const safe = learning.replace(/"/g, '\\"').replace(/\n/g, " ").slice(0, 200);
+    execSync(`bash /data/workspace/scripts/record-learning.sh "${agent}" "${date}" "${safe}"`, { timeout: 5000 });
+    console.log(`\x1b[33m📝\x1b[0m [learning] recorded for ${agent}`);
+  } catch (e: any) {
+    console.error(`\x1b[31m✗\x1b[0m [learning] record failed: ${e.message}`);
+  }
+}
+
 export function handleTaskAutomation(event: FeedEvent): void {
   // Critical alert: agent errors with active task → MQTT + Inbox
   if (event.event === "PostToolUseFailure" || event.event === "Error") {
@@ -242,7 +255,8 @@ export function handleTaskAutomation(event: FeedEvent): void {
         const msg = `⚠️ ${event.oracle} error on task "${active.subject}" in ${team.name}: ${event.message?.slice(0, 100) || "unknown error"}`;
         publishMqttAlert(msg);
         notifyInbox(event.oracle, msg, team.name, active.id);
-        console.log(`\x1b[31m⚠\x1b[0m [task-auto] critical alert sent for ${event.oracle}`);
+        recordLearning(event.oracle, `Task "${active.subject}" failed: ${event.message?.slice(0, 150) || "unknown error"}`);
+        console.log(`\x1b[31m⚠\x1b[0m [task-auto] critical alert + learning recorded for ${event.oracle}`);
         break;
       }
     }
