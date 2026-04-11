@@ -41,6 +41,7 @@ interface TaskData {
   status: string;
   owner: string | null;
   createdAt: number;
+  dispatched_by?: string | null;
 }
 
 // --- Validation ---
@@ -119,12 +120,25 @@ function genId(): string {
 
 // --- Dispatch ---
 
-export async function dispatchTask(teamName: string, task: TaskData): Promise<boolean> {
+/** Detect current oracle name from cwd (e.g. /root/.../keeper-nj-engine → keeper) */
+function detectSender(): string {
+  try {
+    const cwd = process.cwd();
+    const base = cwd.split("/").pop() || "";
+    const name = base.replace(/-nj-engine$/, "").replace(/-oracle$/, "");
+    return name || "unknown";
+  } catch { return "unknown"; }
+}
+
+export async function dispatchTask(teamName: string, task: TaskData, sender?: string): Promise<boolean> {
   if (!task.owner) return false;
   const agent = task.owner;
   try {
     const { cmdWake } = await import("./wake");
     const { cmdSend } = await import("./comm");
+
+    // Record who dispatched this task
+    task.dispatched_by = sender || detectSender();
 
     console.log(`\x1b[36m\u21bb\x1b[0m waking \x1b[33m${agent}\x1b[0m ...`);
     await cmdWake(agent, {});

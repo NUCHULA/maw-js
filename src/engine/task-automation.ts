@@ -23,6 +23,7 @@ interface TaskData {
   status: string;
   owner: string | null;
   createdAt: number;
+  dispatched_by?: string | null;
 }
 
 function loadTeamsWithTasks(): { name: string; tasks: TaskData[] }[] {
@@ -58,6 +59,53 @@ function saveTask(teamName: string, task: TaskData): void {
 function taskProgress(tasks: TaskData[]): string {
   const done = tasks.filter(t => t.status === "completed").length;
   return `${done}/${tasks.length}`;
+}
+
+const NJ_SENDERS = new Set(["nj", "j", "forge", "api"]);
+const NJ_INBOX = "/data/workspace/nj-inbox";
+
+/** Send feedback to the person who dispatched the task */
+async function feedbackToSender(task: TaskData, teamName: string, agent: string, outputPath?: string): Promise<void> {
+  const sender = task.dispatched_by;
+  if (!sender) return;
+
+  const summary = `✅ ${agent} completed "${task.subject}" (${teamName})${outputPath ? ` → ${outputPath}` : ""}`;
+
+  // Write to nj-inbox if sender is NJ/J/forge/api
+  if (NJ_SENDERS.has(sender.toLowerCase())) {
+    try {
+      const { mkdirSync, writeFileSync } = require("fs");
+      mkdirSync(NJ_INBOX, { recursive: true });
+      const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const file = join(NJ_INBOX, `${agent}-${task.id.slice(0, 12)}.md`);
+      writeFileSync(file, [
+        `# Task Completed: ${task.subject}`,
+        `**From**: ${agent}`,
+        `**Team**: ${teamName}`,
+        `**Task ID**: ${task.id}`,
+        `**Dispatched by**: ${sender}`,
+        `**Completed**: ${new Date().toISOString()}`,
+        "",
+        `## Result`,
+        outputPath ? `Output saved to: \`${outputPath}\`` : "Task completed successfully.",
+        "",
+      ].join("\n"));
+      console.log(`\x1b[32m✓\x1b[0m [feedback] wrote ${file}`);
+    } catch (e: any) {
+      console.error(`\x1b[31m✗\x1b[0m [feedback] nj-inbox write failed: ${e.message}`);
+    }
+  }
+
+  // maw hey back to sender agent (if sender is an oracle agent, not nj/j/api)
+  if (!NJ_SENDERS.has(sender.toLowerCase())) {
+    try {
+      const { cmdSend } = await import("../commands/comm");
+      await cmdSend(sender, summary, true);
+      console.log(`\x1b[32m✓\x1b[0m [feedback] maw hey → ${sender}`);
+    } catch (e: any) {
+      console.error(`\x1b[31m✗\x1b[0m [feedback] maw hey ${sender} failed: ${e.message}`);
+    }
+  }
 }
 
 function notifyInbox(agent: string, message: string, teamName: string, taskId: string): void {
@@ -156,6 +204,11 @@ export function handleTaskAutomation(event: FeedEvent): void {
       inboxMsg += ` → chaining "${next.subject}" to ${next.owner}`;
     }
     notifyInbox(agent, inboxMsg, team.name, active.id);
+
+    // Feedback chain: notify whoever dispatched this task
+    feedbackToSender(active, team.name, agent).catch(e =>
+      console.error(`\x1b[31m✗\x1b[0m [feedback] failed: ${e.message}`)
+    );
 
     if (next && next.owner) {
       dispatchNext(team.name, next).catch(e =>

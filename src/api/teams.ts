@@ -78,7 +78,7 @@ teamsApi.post("/teams/:name/tasks", async (c) => {
     };
     saveTask(name, task);
     if (task.owner) {
-      dispatchTask(name, task).catch(() => {});
+      dispatchTask(name, task, "api").catch(() => {});
     }
     return c.json({ ok: true, task }, 201);
   } catch (e: any) { return c.json({ error: e.message }, 400); }
