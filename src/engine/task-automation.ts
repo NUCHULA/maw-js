@@ -1,9 +1,11 @@
 /**
- * Task automation: auto-complete on Stop + chaining to next pending task.
+ * Task automation: auto-complete on Stop + chaining + notifications.
  *
  * Listens for feed events:
  * - Stop / SessionEnd / SubagentStop → mark agent's in_progress task as completed
  * - On completion → dispatch next pending task in same team (if any)
+ * - On completion → push Notification (attention) to Inbox via feed
+ * - On critical (fail/error) → publish MQTT to oracle/claude/request for LINE alert
  */
 
 import { readdirSync, readFileSync } from "fs";
@@ -59,14 +61,78 @@ function saveTask(teamName: string, task: TaskData): void {
   writeFileSync(join(dir, `${task.id}.json`), JSON.stringify(task, null, 2) + "\n");
 }
 
+/** Count completed/total tasks in a team */
+function taskProgress(tasks: TaskData[]): string {
+  const done = tasks.filter(t => t.status === "completed").length;
+  return `${done}/${tasks.length}`;
+}
+
+/** Push Inbox notification (Notification event with "attention" keyword → UI auto-creates ask) */
+function notifyInbox(agent: string, message: string, teamName: string, taskId: string): void {
+  pushFeedEvent({
+    timestamp: new Date().toISOString(),
+    oracle: agent,
+    host: hostname(),
+    event: "Notification",
+    project: teamName,
+    sessionId: taskId,
+    message: `[attention] ${message}`,
+    ts: Date.now(),
+  });
+}
+
+/** Publish critical alert to MQTT for LINE notification via claude-bridge */
+function publishMqttAlert(message: string): void {
+  try {
+    const mqtt = require("mqtt");
+    const { loadConfig } = require("../config");
+    const config = loadConfig();
+    const broker = config.mqtt?.broker;
+    if (!broker) return;
+    const client = mqtt.connect(broker, { connectTimeout: 3000 });
+    client.on("connect", () => {
+      client.publish("oracle/claude/request", JSON.stringify({
+        type: "line_notify",
+        message,
+        ts: Date.now(),
+      }), { qos: 1 }, () => {
+        client.end();
+      });
+    });
+    client.on("error", () => client.end());
+    // Auto-close after 5s if connect hangs
+    setTimeout(() => { try { client.end(); } catch {} }, 5000);
+  } catch (e) {
+    console.error(`[task-auto] MQTT publish failed: ${e}`);
+  }
+}
+
 /**
- * Handle a feed event: auto-complete + chain.
+ * Handle a feed event: auto-complete + chain + notify.
  * Called from feedListeners in engine.
  */
 export function handleTaskAutomation(event: FeedEvent): void {
+  // --- Critical alert: agent errors/failures → MQTT for LINE ---
+  if (event.event === "PostToolUseFailure" || event.event === "Error") {
+    // Check if this agent has an in_progress task
+    const teams = loadTeamsWithTasks();
+    for (const team of teams) {
+      const active = team.tasks.find(t => t.owner === event.oracle && t.status === "in_progress");
+      if (active) {
+        const msg = `⚠️ ${event.oracle} error on task "${active.subject}" in ${team.name}: ${event.message?.slice(0, 100) || "unknown error"}`;
+        publishMqttAlert(msg);
+        notifyInbox(event.oracle, msg, team.name, active.id);
+        console.log(`\x1b[31m⚠\x1b[0m [task-auto] critical alert sent for ${event.oracle}`);
+        break;
+      }
+    }
+    return;
+  }
+
   if (!STOP_EVENTS.has(event.event)) return;
   // Skip self-generated events (from task automation itself)
   if (event.message?.startsWith("Task auto-completed:") || event.message?.startsWith("Task dispatched:")) return;
+  if (event.message?.startsWith("[attention]")) return;
 
   const agent = event.oracle; // e.g. "scout"
   if (!agent) return;
@@ -101,10 +167,18 @@ export function handleTaskAutomation(event: FeedEvent): void {
       ts: Date.now(),
     });
 
-    // Chain: find next pending task in this team (any owner, or same agent preferred)
+    // Chain: find next pending task in this team for same agent
     const nextForAgent = team.tasks.find(t => t.owner === agent && t.status === "pending");
     const nextAny = team.tasks.find(t => t.status === "pending" && t.owner);
     const next = nextForAgent || nextAny;
+
+    // --- Inbox notification ---
+    const progress = taskProgress(team.tasks);
+    let inboxMsg = `${agent} completed "${active.subject}" (${team.name} ${progress})`;
+    if (next && next.owner) {
+      inboxMsg += ` → chaining "${next.subject}" to ${next.owner}`;
+    }
+    notifyInbox(agent, inboxMsg, team.name, active.id);
 
     if (next && next.owner) {
       // Dispatch async (don't block feed listener)
