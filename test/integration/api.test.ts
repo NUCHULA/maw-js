@@ -2,11 +2,17 @@
  * api.test.ts — Integration tests for maw-js API endpoints
  *
  * Requires running maw-js on localhost:3456.
- * Tests skip gracefully if server is not available.
+ *
+ * Behavior:
+ *   - MAW_REQUIRE_SERVER=1 (integration mode): fails if server not running
+ *   - default: skips gracefully if server not running
+ *
+ * Run via: `bun run test:integration` (sets MAW_REQUIRE_SERVER=1)
  */
 import { describe, test, expect, beforeAll } from "bun:test";
 
 const BASE = "http://127.0.0.1:3456";
+const REQUIRE_SERVER = process.env.MAW_REQUIRE_SERVER === "1";
 let serverUp = false;
 
 beforeAll(async () => {
@@ -16,10 +22,19 @@ beforeAll(async () => {
   } catch {
     serverUp = false;
   }
+  if (REQUIRE_SERVER && !serverUp) {
+    throw new Error(
+      `maw-js not running on ${BASE} — integration tests require a live server. ` +
+      `Start it with: systemctl start maw-js`
+    );
+  }
 });
 
 function requireServer() {
   if (!serverUp) {
+    if (REQUIRE_SERVER) {
+      throw new Error(`server required but not running on ${BASE}`);
+    }
     console.log("  ⏭ skipped — maw-js not running on :3456");
     return false;
   }
