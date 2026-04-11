@@ -63,6 +63,95 @@ function taskProgress(tasks: TaskData[]): string {
 
 const NJ_SENDERS = new Set(["nj", "j", "forge", "api"]);
 const NJ_INBOX = "/data/workspace/nj-inbox";
+const TASK_LOG = "/data/workspace/reports/task-log.jsonl";
+
+// --- Hierarchy map: agent → dept_head → forge → nj-inbox ---
+const DEPT_HEADS: Record<string, string> = {
+  // engineering
+  hammer: "keeper", mill: "keeper", clock: "keeper",
+  // qa
+  audit: "proof", whet: "proof",
+  // rnd
+  lens: "scout", sage: "scout", weave: "scout",
+  // hr
+  mold: "mirror", anvil: "mirror",
+  // comms
+  bridge: "voice", cipher: "voice", pact: "voice",
+  // creative
+  draft: "spark",
+  // intel
+  sieve: "watch", tag: "watch",
+};
+const DEPT_HEAD_SET = new Set(["keeper", "proof", "scout", "mirror", "voice", "spark", "watch"]);
+
+function getReportTarget(agent: string): string | null {
+  // agent → dept_head
+  if (DEPT_HEADS[agent]) return DEPT_HEADS[agent];
+  // dept_head → forge
+  if (DEPT_HEAD_SET.has(agent)) return "forge";
+  // forge → nj-inbox (handled separately)
+  if (agent === "forge") return null; // special: writes nj-inbox
+  return null;
+}
+
+/** Append task completion to JSONL log */
+function logTaskCompletion(task: TaskData, teamName: string, agent: string): void {
+  try {
+    const { appendFileSync, mkdirSync } = require("fs");
+    const { dirname } = require("path");
+    mkdirSync(dirname(TASK_LOG), { recursive: true });
+    const entry = {
+      ts: new Date().toISOString(),
+      team: teamName,
+      task_id: task.id,
+      subject: task.subject,
+      owner: agent,
+      dispatched_by: task.dispatched_by || null,
+      status: "completed",
+      duration_ms: task.createdAt ? Date.now() - task.createdAt : null,
+    };
+    appendFileSync(TASK_LOG, JSON.stringify(entry) + "\n");
+  } catch (e: any) {
+    console.error(`[report] task-log write failed: ${e.message}`);
+  }
+}
+
+/** Report up 1 level in hierarchy */
+async function reportUpward(agent: string, task: TaskData, teamName: string): Promise<void> {
+  const target = getReportTarget(agent);
+
+  // forge → nj-inbox
+  if (agent === "forge") {
+    try {
+      const { mkdirSync, writeFileSync } = require("fs");
+      mkdirSync(NJ_INBOX, { recursive: true });
+      const file = join(NJ_INBOX, `${agent}-report-${task.id.slice(0, 12)}.md`);
+      writeFileSync(file, [
+        `# Report: ${task.subject}`,
+        `**From**: ${agent} (upward report)`,
+        `**Team**: ${teamName}`,
+        `**Task**: ${task.id}`,
+        `**Completed**: ${new Date().toISOString()}`,
+        "",
+      ].join("\n"));
+      console.log(`\x1b[32m✓\x1b[0m [report] forge → nj-inbox`);
+    } catch (e: any) {
+      console.error(`\x1b[31m✗\x1b[0m [report] nj-inbox failed: ${e.message}`);
+    }
+    return;
+  }
+
+  if (!target) return;
+
+  try {
+    const { cmdSend } = await import("../commands/comm");
+    const msg = `📊 ${agent} completed "${task.subject}" (${teamName})`;
+    await cmdSend(target, msg, true);
+    console.log(`\x1b[32m✓\x1b[0m [report] ${agent} → ${target}`);
+  } catch (e: any) {
+    console.error(`\x1b[31m✗\x1b[0m [report] ${agent} → ${target} failed: ${e.message}`);
+  }
+}
 
 /** Send feedback to the person who dispatched the task */
 async function feedbackToSender(task: TaskData, teamName: string, agent: string, outputPath?: string): Promise<void> {
@@ -205,9 +294,17 @@ export function handleTaskAutomation(event: FeedEvent): void {
     }
     notifyInbox(agent, inboxMsg, team.name, active.id);
 
+    // Log to JSONL
+    logTaskCompletion(active, team.name, agent);
+
     // Feedback chain: notify whoever dispatched this task
     feedbackToSender(active, team.name, agent).catch(e =>
       console.error(`\x1b[31m✗\x1b[0m [feedback] failed: ${e.message}`)
+    );
+
+    // Report up 1 level in hierarchy
+    reportUpward(agent, active, team.name).catch(e =>
+      console.error(`\x1b[31m✗\x1b[0m [report] upward failed: ${e.message}`)
     );
 
     if (next && next.owner) {
