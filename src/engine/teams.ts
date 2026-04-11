@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { tmux } from "../tmux";
+import { capture } from "../ssh";
 import type { MawWS } from "../types";
 
 interface TeamData {
@@ -15,59 +16,115 @@ interface TeamData {
 const TEAMS_DIR = join(homedir(), ".claude/teams");
 const TASKS_DIR = join(homedir(), ".claude/tasks");
 
-/** Get all live tmux pane IDs (async via tmux abstraction) */
-async function livePaneIds(): Promise<Set<string>> {
-  try {
-    const raw = await tmux.run("list-panes", "-a", "-F", "#{pane_id}");
-    return new Set(raw.split("\n").filter(Boolean));
-  } catch { return new Set(); }
+const COLORS = ["blue", "green", "red", "yellow", "purple", "cyan", "orange", "pink"];
+
+function autoColor(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = ((h << 5) - h + name.charCodeAt(i)) | 0;
+  return COLORS[Math.abs(h) % COLORS.length];
 }
 
-/** Check if a team has any alive members */
-function isTeamAlive(members: any[], panes: Set<string>): boolean {
-  for (const m of members) {
-    // tmux-mode: check if pane exists
-    if (m.backendType === "tmux" && m.tmuxPaneId && panes.has(m.tmuxPaneId)) return true;
-    // in-process: check if cwd is on this machine (not /Users/ on a Linux box)
-    if (m.backendType === "in-process" && m.cwd) {
-      const isLocal = m.cwd.startsWith(homedir());
-      if (!isLocal) continue; // remote/MBA leftover
-      // Check if lead's Claude session might still be running (heuristic: created < 2h ago)
-      if (m.joinedAt && Date.now() - m.joinedAt < 2 * 60 * 60 * 1000) return true;
+function extractModel(content: string): string {
+  const lines = content.split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const plain = lines[i].replace(/\x1b\[[0-9;]*m/g, "");
+    const m = plain.match(/❯\s+(\S+)\s+·/);
+    if (m) return m[1];
+  }
+  return "";
+}
+
+async function buildTmuxLookup(): Promise<Map<string, { target: string; paneId: string; cwd: string; isActive: boolean }>> {
+  const lookup = new Map<string, { target: string; paneId: string; cwd: string; isActive: boolean }>();
+  try {
+    const raw = await tmux.run(
+      "list-panes", "-a", "-F",
+      "#{session_name}:#{window_index}|||#{window_name}|||#{pane_id}|||#{pane_current_path}|||#{pane_current_command}"
+    );
+    for (const line of raw.split("\n").filter(Boolean)) {
+      const [target, winName, paneId, cwd, cmd] = line.split("|||");
+      const agentName = winName.replace(/-oracle$/, "").replace(/-nj-engine$/, "");
+      const isActive = /claude|codex|node/i.test(cmd || "");
+      lookup.set(agentName, { target, paneId, cwd: cwd || "", isActive });
     }
-    // team-lead with empty paneId: check by cwd locality + recency
-    if (m.agentType === "team-lead" || m.name === "team-lead") {
-      if (m.cwd && m.cwd.startsWith(homedir()) && m.joinedAt && Date.now() - m.joinedAt < 2 * 60 * 60 * 1000) return true;
+  } catch { /* tmux not running */ }
+  return lookup;
+}
+
+async function batchExtractModels(agents: { name: string; target: string }[]): Promise<Map<string, string>> {
+  const models = new Map<string, string>();
+  const results = await Promise.allSettled(
+    agents.map(async ({ name, target }) => {
+      const content = await capture(target, 5);
+      return { name, model: extractModel(content) };
+    })
+  );
+  for (const r of results) {
+    if (r.status === "fulfilled" && r.value.model) {
+      models.set(r.value.name, r.value.model);
     }
   }
-  return false;
+  return models;
 }
 
-/** Scan all teams + tasks, return current state with liveness */
+/** Scan all teams + tasks, return current state with liveness + enriched members */
 export async function scanTeams(): Promise<TeamData[]> {
   try {
     const dirs = readdirSync(TEAMS_DIR).filter(d =>
       existsSync(join(TEAMS_DIR, d, "config.json"))
     );
-    const panes = await livePaneIds();
-    return dirs.map(d => {
+    if (dirs.length === 0) return [];
+
+    const tmuxLookup = await buildTmuxLookup();
+    const needModel: { name: string; target: string }[] = [];
+
+    const teamConfigs = dirs.map(d => {
+      try { return JSON.parse(readFileSync(join(TEAMS_DIR, d, "config.json"), "utf-8")); }
+      catch { return null; }
+    }).filter(Boolean);
+
+    for (const config of teamConfigs) {
+      for (const m of config.members || []) {
+        const info = tmuxLookup.get(m.name);
+        if (info?.isActive) {
+          needModel.push({ name: m.name, target: info.target });
+        }
+      }
+    }
+
+    const models = needModel.length > 0 ? await batchExtractModels(needModel) : new Map<string, string>();
+
+    return teamConfigs.map(config => {
+      const td = join(TASKS_DIR, config.name);
+      let tasks: any[] = [];
       try {
-        const config = JSON.parse(readFileSync(join(TEAMS_DIR, d, "config.json"), "utf-8"));
-        const tasksDir = join(TASKS_DIR, d);
-        let tasks: any[] = [];
-        try {
-          tasks = readdirSync(tasksDir)
-            .filter(f => f.endsWith(".json"))
-            .map(f => {
-              try { return JSON.parse(readFileSync(join(tasksDir, f), "utf-8")); }
-              catch { return null; }
-            })
-            .filter(Boolean);
-        } catch { /* expected: tasks dir may not exist */ }
-        const alive = isTeamAlive(config.members || [], panes);
-        return { ...config, tasks, alive };
-      } catch { return null; }
-    }).filter(Boolean) as TeamData[];
+        tasks = readdirSync(td)
+          .filter(f => f.endsWith(".json"))
+          .map(f => {
+            try { return JSON.parse(readFileSync(join(td, f), "utf-8")); }
+            catch { return null; }
+          })
+          .filter(Boolean);
+      } catch { /* tasks dir may not exist */ }
+
+      let alive = false;
+      const members = (config.members || []).map((m: any) => {
+        const info = tmuxLookup.get(m.name);
+        const isActive = info?.isActive ?? false;
+        if (isActive) alive = true;
+
+        return {
+          ...m,
+          isActive,
+          tmuxPaneId: info?.paneId || m.tmuxPaneId || "",
+          cwd: info?.cwd || m.cwd || "",
+          model: models.get(m.name) || m.model || "",
+          color: m.color || autoColor(m.name),
+        };
+      });
+
+      return { ...config, members, tasks, alive };
+    });
   } catch { return []; }
 }
 
