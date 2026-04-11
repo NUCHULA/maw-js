@@ -2,10 +2,15 @@ import { Hono } from "hono";
 import { getFederationStatus } from "../peers";
 import { loadConfig } from "../config";
 import { listSnapshots, loadSnapshot, latestSnapshot } from "../snapshot";
+import { hostedAgents } from "../commands/federation-sync";
 import { readFileSync, readdirSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { FLEET_DIR } from "../paths";
+
+// Re-export so existing importers (and any future code) can still reach
+// hostedAgents via the API module. The canonical home is federation-sync.ts.
+export { hostedAgents };
 
 export const federationApi = new Hono();
 
@@ -25,13 +30,11 @@ federationApi.get("/snapshots/:id", (c) => {
   return c.json(snap);
 });
 
-/** Node identity — public endpoint for federation dedup (#192) */
+/** Node identity — public endpoint for federation dedup (#192). */
 federationApi.get("/identity", async (c) => {
   const config = loadConfig();
   const node = config.node ?? "local";
-  const agents = Object.entries(config.agents || {})
-    .filter(([, n]) => n === node)
-    .map(([name]) => name);
+  const agents = hostedAgents(config.agents || {}, node);
   const pkg = require("../../package.json");
   return c.json({
     node,
