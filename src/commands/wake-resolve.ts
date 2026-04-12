@@ -29,8 +29,15 @@ export async function fetchIssuePrompt(issueNum: number, repo?: string): Promise
   ].filter(Boolean).join("\n");
 }
 
+/** Normalize symlink paths: /root/ghq → /data/ghq (canonical) */
+function canonicalPath(p: string): string {
+  // Common symlink on this system: /root/ghq → /data/ghq
+  return p.replace(/^\/root\/ghq\//, "/data/ghq/");
+}
+
 export async function resolveOracle(oracle: string): Promise<{ repoPath: string; repoName: string; parentDir: string }> {
-  const ghqOut = await hostExec(`ghq list --full-path | grep -i '/${oracle}-oracle$' | head -1`);
+  // Search for both -oracle and -nj-engine patterns (NUCHULA uses -nj-engine)
+  const ghqOut = await hostExec(`ghq list --full-path | grep -iE '/${oracle}-(oracle|nj-engine)$' | head -1`);
   if (ghqOut?.trim()) {
     const repoPath = ghqOut.trim();
     return { repoPath, repoName: repoPath.split("/").pop()!, parentDir: repoPath.replace(/\/[^/]+$/, "") };
@@ -41,14 +48,18 @@ export async function resolveOracle(oracle: string): Promise<{ repoPath: string;
   try {
     for (const file of readdirSync(FLEET_DIR).filter(f => f.endsWith(".json"))) {
       const config = JSON.parse(readFileSync(join(FLEET_DIR, file), "utf-8"));
-      const win = (config.windows || []).find((w: any) => w.name === `${oracle}-oracle`);
+      // Match: oracle-oracle, oracle-nj-engine, or oracle
+      const win = (config.windows || []).find((w: any) =>
+        w.name === `${oracle}-oracle` || w.name === `${oracle}-nj-engine` || w.name === oracle
+      );
       if (win?.repo) {
-        const fullPath = await hostExec(`ghq list --full-path | grep -i '/${win.repo.replace(/^[^/]+\//, "")}$' | head -1`);
+        // Normalize fleet repo path (may use /root/ghq symlink) then search ghq
+        const repoBaseName = canonicalPath(win.repo).split("/").pop() || win.repo.replace(/^[^/]+\//, "");
+        const fullPath = await hostExec(`ghq list --full-path | grep -i '/${repoBaseName}$' | head -1`);
         if (fullPath?.trim()) {
           const repoPath = fullPath.trim();
           return { repoPath, repoName: repoPath.split("/").pop()!, parentDir: repoPath.replace(/\/[^/]+$/, "") };
         }
-        // Fleet knows the slug but it's not cloned yet — remember for step 3
         fleetRepo = win.repo;
       }
     }
@@ -60,8 +71,11 @@ export async function resolveOracle(oracle: string): Promise<{ repoPath: string;
     const cfg = loadConfig() as any;
     const candidates: string[] = [];
     if (fleetRepo) candidates.push(fleetRepo);
-    const orgs: string[] = cfg.githubOrgs || (cfg.githubOrg ? [cfg.githubOrg] : ["Soul-Brews-Studio"]);
-    for (const org of orgs) candidates.push(`${org}/${oracle}-oracle`);
+    const orgs: string[] = cfg.githubOrgs || (cfg.githubOrg ? [cfg.githubOrg] : ["NUCHULA"]);
+    for (const org of orgs) {
+      candidates.push(`${org}/${oracle}-nj-engine`);
+      candidates.push(`${org}/${oracle}-oracle`);
+    }
 
     for (const slug of candidates) {
       // Probe — skip missing repos silently so we can fall through to federation
