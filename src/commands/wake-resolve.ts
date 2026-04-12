@@ -126,7 +126,10 @@ export function resolveFleetSession(oracle: string): string | null {
   try {
     for (const file of readdirSync(FLEET_DIR).filter(f => f.endsWith(".json") && !f.endsWith(".disabled"))) {
       const config = JSON.parse(readFileSync(join(FLEET_DIR, file), "utf-8"));
-      if ((config.windows || []).some((w: any) => w.name === `${oracle}-oracle` || w.name === oracle)) return config.name;
+      // Match: oracle-oracle, oracle, oracle-nj-engine (fleet configs use -nj-engine repo names)
+      if ((config.windows || []).some((w: any) =>
+        w.name === `${oracle}-oracle` || w.name === oracle || w.name === `${oracle}-nj-engine`
+      )) return config.name;
     }
   } catch { /* fleet dir may not exist */ }
   return null;
@@ -136,11 +139,12 @@ export async function detectSession(oracle: string): Promise<string | null> {
   const sessions = await tmux.listSessions();
   const mapped = getSessionMap()[oracle];
   if (mapped && sessions.find(s => s.name === mapped)) return mapped;
+  // Fleet session first — prefer organized fleet over standalone zombie sessions
+  const fleetSession = resolveFleetSession(oracle);
+  if (fleetSession && sessions.find(s => s.name === fleetSession)) return fleetSession;
   const patternMatch = sessions.find(s => /^\d+-/.test(s.name) && s.name.endsWith(`-${oracle}`))?.name
     || sessions.find(s => s.name === oracle)?.name;
   if (patternMatch) return patternMatch;
-  const fleetSession = resolveFleetSession(oracle);
-  if (fleetSession && sessions.find(s => s.name === fleetSession)) return fleetSession;
   return null;
 }
 
