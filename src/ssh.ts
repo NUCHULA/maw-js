@@ -123,14 +123,6 @@ export async function sendKeys(target: string, text: string, host?: string): Pro
     return;
   }
 
-  if (body.startsWith("/")) {
-    // Slash commands: send char by char for interactive tools (Claude Code, etc.)
-    for (const ch of body) {
-      await t.sendKeysLiteral(target, ch);
-    }
-    await t.sendKeys(target, "Enter");
-  } else {
-    // Smart send — uses buffer for multiline/long, send-keys for short
-    await t.sendText(target, body);
-  }
+  // Send as whole string via tmux buffer (works for slash commands, multiline, etc.)
+  await t.sendText(target, body);
 }
