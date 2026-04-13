@@ -11,8 +11,30 @@ import { cmdPr } from "../commands/pr";
 import { cmdCosts } from "../commands/costs";
 import { cmdTriggers } from "../commands/triggers";
 import { cmdHealth } from "../commands/health";
+import { cmdLogList, cmdLogAdd } from "../commands/log";
 
 export async function routeTools(cmd: string, args: string[]): Promise<boolean> {
+  if (cmd === "log") {
+    const sub = args[1];
+    if (sub === "add" && args[2]) {
+      let agent: string | undefined, project: string | undefined;
+      const rest = args.slice(2).filter(a => {
+        if (a.startsWith("--agent=")) { agent = a.split("=")[1]; return false; }
+        if (a.startsWith("--project=")) { project = a.split("=")[1]; return false; }
+        return true;
+      });
+      await cmdLogAdd(rest[0], rest.slice(1).join(" ") || "", { agent, project });
+    } else {
+      let agent: string | undefined, action: string | undefined, limit: number | undefined;
+      for (let i = 1; i < args.length; i++) {
+        if (args[i] === "--agent" && args[i + 1]) agent = args[++i];
+        else if (args[i] === "--action" && args[i + 1]) action = args[++i];
+        else if (args[i] === "--limit" && args[i + 1]) limit = +args[++i];
+      }
+      await cmdLogList({ agent, action, limit });
+    }
+    return true;
+  }
   if (cmd === "view" || cmd === "create-view" || cmd === "attach" || cmd === "a") {
     if (!args[1]) { console.error("usage: maw view <agent> [window] [--clean]"); process.exit(1); }
     const clean = args.includes("--clean");
