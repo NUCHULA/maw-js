@@ -134,17 +134,38 @@ export async function dispatchTask(teamName: string, task: TaskData, sender?: st
   if (!task.owner) return false;
   const agent = task.owner;
   try {
-    const { cmdWake } = await import("./wake");
-    const { cmdSend } = await import("./comm");
-
     // Record who dispatched this task
     task.dispatched_by = sender || detectSender();
 
-    console.log(`\x1b[36m\u21bb\x1b[0m waking \x1b[33m${agent}\x1b[0m ...`);
-    await cmdWake(agent, {});
+    // Use direct tmux operations instead of cmdSend (which calls process.exit on failure)
+    const { listSessions, sendKeys } = await import("../ssh");
+    const { findWindow } = await import("../find-window");
 
+    // Try to find agent window first (skip wake if already running)
+    let sessions = await listSessions();
+    let target = findWindow(sessions, agent);
+
+    if (!target) {
+      // Agent not found — try waking
+      console.log(`\x1b[36m\u21bb\x1b[0m waking \x1b[33m${agent}\x1b[0m ...`);
+      try {
+        const { cmdWake } = await import("./wake");
+        await cmdWake(agent, {});
+      } catch (e: any) {
+        console.error(`\x1b[33m\u26a0\x1b[0m wake ${agent} failed: ${e.message}`);
+      }
+      // Re-fetch sessions after wake
+      sessions = await listSessions();
+      target = findWindow(sessions, agent);
+    }
+
+    if (!target) {
+      throw new Error(`window not found for ${agent} after wake attempt`);
+    }
+
+    const msg = `[task:${task.id}] ${task.subject}`;
     console.log(`\x1b[36m\u21bb\x1b[0m sending task to \x1b[33m${agent}\x1b[0m ...`);
-    await cmdSend(agent, `[task:${task.id}] ${task.subject}`, true);
+    await sendKeys(target, msg);
 
     task.status = "in_progress";
     saveTask(teamName, task);
@@ -160,7 +181,7 @@ export async function dispatchTask(teamName: string, task: TaskData, sender?: st
       ts: Date.now(),
     });
 
-    console.log(`\x1b[32m\u2713\x1b[0m dispatched to \x1b[33m${agent}\x1b[0m \u2014 status \u2192 in_progress`);
+    console.log(`\x1b[32m\u2713\x1b[0m dispatched to \x1b[33m${agent}\x1b[0m (${target}) \u2014 status \u2192 in_progress`);
     return true;
   } catch (e: any) {
     console.error(`\x1b[31m\u2717\x1b[0m dispatch to \x1b[33m${agent}\x1b[0m failed: ${e.message}`);
