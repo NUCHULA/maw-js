@@ -89,7 +89,8 @@ export async function cmdWake(oracle: string, opts: { task?: string; newWt?: str
 
   if (!session) {
     session = getSessionMap()[oracle] || resolveFleetSession(oracle) || oracle;
-    const mainWindowName = `${oracle}-oracle`;
+    // Use repo-based window name: keeper-nj-engine if repo matches, else oracle-oracle (upstream default)
+    const mainWindowName = repoName.endsWith('-nj-engine') ? repoName : `${oracle}-oracle`;
     await tmux.newSession(session, { window: mainWindowName, cwd: repoPath });
     await setSessionEnv(session);
     await new Promise(r => setTimeout(r, 300));
@@ -156,7 +157,7 @@ export async function cmdWake(oracle: string, opts: { task?: string; newWt?: str
   if (reordered > 0) console.log(`\x1b[36m↻ ${reordered} window(s) reordered to saved positions.\x1b[0m`);
 
   let targetPath = repoPath;
-  let windowName = `${oracle}-oracle`;
+  let windowName = repoName.endsWith('-nj-engine') ? repoName : `${oracle}-oracle`;
 
   if (opts.listWt) {
     const worktrees = await findWorktrees(parentDir, repoName);
