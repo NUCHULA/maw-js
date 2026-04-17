@@ -2,7 +2,7 @@ import { tmux } from "../tmux";
 import { registerBuiltinHandlers } from "../handlers";
 import { pushCapture, pushPreviews, broadcastSessions, sendBusyAgents } from "./capture";
 import { StatusDetector } from "./status";
-import { broadcastTeams } from "./teams";
+import { broadcastTeams, scanTeams } from "./teams";
 import { handleTaskAutomation } from "./task-automation";
 import { getAggregatedSessions, getPeers } from "../peers";
 import { loadConfig, buildCommand, cfgInterval, cfgLimit } from "../config";
@@ -106,6 +106,10 @@ export class MawEngine {
     };
     sendInitialSessions().catch(() => {});
     ws.send(JSON.stringify({ type: "feed-history", events: this.feedBuffer.slice(-cfgLimit("feedHistory")) }));
+    // NUCHULA patch #6: send teams immediately on connect (no 3s wait)
+    scanTeams().then(teams => {
+      ws.send(JSON.stringify({ type: "teams", teams }));
+    }).catch(() => {});
   }
 
   handleMessage(ws: MawWS, msg: string | Buffer) {

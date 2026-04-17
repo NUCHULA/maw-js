@@ -1,0 +1,20 @@
+Integer accumulator. Stores and outputs an integer value.
+
+Alias: `i`
+
+## Inlets
+
+- **Inlet 0 (hot)**: Set value and output immediately. Bang outputs current value.
+- **Inlet 1 (cold)**: Set value without outputting.
+
+## Arguments
+
+- `int <initial>` - Set initial value (e.g., `int 69` starts with value 69)
+
+_Inspired by [Pure Data](https://pd.iem.sh/objects/int)._
+
+## See Also
+
+- [float](/docs/objects/float) - float accumulator
+- [expr](/docs/objects/expr) - expression evaluator
+- [Hot and Cold Inlets](/docs/topics/hot-cold-inlets)

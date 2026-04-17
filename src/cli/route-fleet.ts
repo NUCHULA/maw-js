@@ -1,21 +1,35 @@
 import { cmdFleetLs, cmdFleetRenumber, cmdFleetValidate, cmdFleetSync, cmdFleetSyncConfigs } from "../commands/fleet";
-import { cmdFleetInit } from "../commands/fleet-init";
+import { cmdFleetInit, cmdFleetInitAgents } from "../commands/fleet-init";
 import { cmdPulseAdd, cmdPulseLs } from "../commands/pulse";
 import { cmdOverview } from "../commands/overview";
 import { cmdMegaStatus, cmdMegaStop } from "../commands/mega";
 import { cmdFederationStatus } from "../commands/federation";
+import { cmdFederationSync } from "../commands/federation-sync";
 import { cmdReunion } from "../commands/reunion";
 import { cmdSoulSync } from "../commands/soul-sync";
 import { cmdFleetHealth } from "../commands/fleet-health";
+import { cmdFleetDoctor } from "../commands/fleet-doctor";
 import { cmdFleetConsolidate } from "../commands/fleet-consolidate";
 import { cmdArchive } from "../commands/archive";
 import { cmdFind } from "../commands/find";
+import { cmdRestart } from "../commands/restart";
 
 export async function routeFleet(cmd: string, args: string[]): Promise<boolean> {
+  if (cmd === "restart" || cmd === "reboot") {
+    const noUpdate = args.includes("--no-update");
+    const refIdx = args.indexOf("--ref");
+    const ref = refIdx >= 0 ? args[refIdx + 1] : undefined;
+    await cmdRestart({ noUpdate, ref });
+    return true;
+  }
   if (cmd === "fleet") {
     const sub = args[1];
     if (sub === "init") {
-      await cmdFleetInit();
+      if (args.includes("--agents")) {
+        await cmdFleetInitAgents({ dryRun: args.includes("--dry-run") });
+      } else {
+        await cmdFleetInit();
+      }
     } else if (sub === "ls") {
       await cmdFleetLs();
     } else if (sub === "renumber") {
@@ -24,6 +38,8 @@ export async function routeFleet(cmd: string, args: string[]): Promise<boolean> 
       await cmdFleetValidate();
     } else if (sub === "health") {
       await cmdFleetHealth();
+    } else if (sub === "doctor" || sub === "dr") {
+      await cmdFleetDoctor({ fix: args.includes("--fix"), json: args.includes("--json") });
     } else if (sub === "consolidate") {
       await cmdFleetConsolidate({ dryRun: args.includes("--dry-run"), remove: args.includes("--remove") });
     } else if (sub === "sync") {
@@ -124,8 +140,16 @@ export async function routeFleet(cmd: string, args: string[]): Promise<boolean> 
     const sub = args[1]?.toLowerCase();
     if (!sub || sub === "status" || sub === "ls") {
       await cmdFederationStatus();
+    } else if (sub === "sync") {
+      await cmdFederationSync({
+        dryRun: args.includes("--dry-run"),
+        check: args.includes("--check"),
+        prune: args.includes("--prune"),
+        force: args.includes("--force"),
+        json: args.includes("--json"),
+      });
     } else {
-      console.error("usage: maw federation status");
+      console.error("usage: maw federation <status|sync> [--dry-run|--check|--prune|--force|--json]");
       process.exit(1);
     }
     return true;

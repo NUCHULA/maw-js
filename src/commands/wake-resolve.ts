@@ -176,3 +176,6 @@ export function sanitizeBranchName(name: string): string {
   return name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9._\-]/g, "")
     .replace(/\.{2,}/g, ".").replace(/^[-.]|[-.]$/g, "").slice(0, 50);
 }
+
+// Wake target parsing (parseWakeTarget, ensureCloned) is in wake-target.ts
+// — extracted to avoid pulling config.ts import chain into tests (CI #270).

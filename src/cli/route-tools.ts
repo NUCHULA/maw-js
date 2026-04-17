@@ -12,8 +12,13 @@ import { cmdCosts } from "../commands/costs";
 import { cmdTriggers } from "../commands/triggers";
 import { cmdHealth } from "../commands/health";
 import { cmdLogList, cmdLogAdd } from "../commands/log";
+import { cmdUi } from "../commands/ui";
 
 export async function routeTools(cmd: string, args: string[]): Promise<boolean> {
+  if (cmd === "ui") {
+    await cmdUi(args.slice(1));
+    return true;
+  }
   if (cmd === "log") {
     const sub = args[1];
     if (sub === "add" && args[2]) {
@@ -37,9 +42,9 @@ export async function routeTools(cmd: string, args: string[]): Promise<boolean> 
   }
   if (cmd === "view" || cmd === "create-view" || cmd === "attach" || cmd === "a") {
     if (!args[1]) { console.error("usage: maw view <agent> [window] [--clean]"); process.exit(1); }
-    const clean = args.includes("--clean");
-    const viewArgs = args.slice(1).filter(a => a !== "--clean");
-    await cmdView(viewArgs[0], viewArgs[1], clean);
+    const { parseFlags } = await import("./parse-args");
+    const flags = parseFlags(args, { "--clean": Boolean }, 1);
+    await cmdView(flags._[0], flags._[1], flags["--clean"]);
     return true;
   }
   if (cmd === "tab" || cmd === "tabs") {
@@ -84,11 +89,9 @@ export async function routeTools(cmd: string, args: string[]): Promise<boolean> 
   }
   if (cmd === "assign") {
     if (!args[1]) { console.error("usage: maw assign <issue-url> [--oracle <name>]"); process.exit(1); }
-    let oracle: string | undefined;
-    for (let i = 2; i < args.length; i++) {
-      if (args[i] === "--oracle" && args[i + 1]) { oracle = args[++i]; }
-    }
-    await cmdAssign(args[1], { oracle });
+    const { parseFlags } = await import("./parse-args");
+    const flags = parseFlags(args, { "--oracle": String }, 1);
+    await cmdAssign(flags._[0], { oracle: flags["--oracle"] });
     return true;
   }
   if (cmd === "costs" || cmd === "cost") {

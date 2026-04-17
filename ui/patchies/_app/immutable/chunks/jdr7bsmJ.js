@@ -1,0 +1,24 @@
+import { I as o, J as _, K as v, F as m, E as b, i as h } from "./CeQCqUQ_.js";
+function y(e, a, u = a) {
+  var c = o(), n = /* @__PURE__ */ new WeakSet();
+  _(e, "input", (r) => {
+    var l = r ? e.defaultValue : e.value;
+    if (l = s(e) ? t(l) : l, u(l), v !== null && n.add(v), c && l !== (l = a())) {
+      var d = e.selectionStart, f = e.selectionEnd;
+      e.value = l ?? "", f !== null && (e.selectionStart = d, e.selectionEnd = Math.min(f, e.value.length));
+    }
+  }), (h && e.defaultValue !== e.value || m(a) == null && e.value) && (u(s(e) ? t(e.value) : e.value), v !== null && n.add(v)), b(() => {
+    var r = a();
+    e === document.activeElement && n.has(v) || s(e) && r === t(e.value) || e.type === "date" && !r && !e.value || r !== e.value && (e.value = r ?? "");
+  });
+}
+function s(e) {
+  var a = e.type;
+  return a === "number" || a === "range";
+}
+function t(e) {
+  return e === "" ? null : +e;
+}
+export {
+  y as b
+};
