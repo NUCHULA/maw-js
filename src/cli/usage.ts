@@ -11,6 +11,8 @@ export function usage() {
   maw wake <oracle> --issue N Wake oracle with GitHub issue as prompt
   maw wake <oracle> --incubate org/repo  Clone repo + worktree
   maw fleet init              Scan ghq repos, generate fleet/*.json
+  maw fleet init --agents     Reconcile config.agents from fleet + peers
+                              (additive, add --dry-run to preview)
   maw fleet ls                List fleet configs with conflict detection
   maw fleet renumber          Fix numbering conflicts (sequential)
   maw fleet validate          Check for problems (dupes, orphans, missing repos)
@@ -21,6 +23,7 @@ export function usage() {
   maw wake all --resume       Wake fleet + send /recap to active board items
   maw sleep <oracle> [window] Gracefully stop one oracle window
   maw stop                    Stop all fleet sessions
+  maw restart                 Clean views + update + stop + wake all
   maw about <oracle>           Oracle profile — session, worktrees, fleet
   maw oracle ls               Fleet status (awake/sleeping/worktrees)
   maw overview              War-room: all oracles in split panes
@@ -28,10 +31,15 @@ export function usage() {
   maw overview --kill       Tear down overview
   maw bud <name>               Bud new oracle from current (yeast model)
   maw bud <name> --from <o>   Bud from specific parent oracle
+  maw bud <name> --root       Root oracle — no parent lineage (works from empty)
+  maw bud <name> --root --repo org/project   Root + incubate into existing repo
   maw take <sess>:<win> [tgt] Move window to session (omit tgt = split to own session)
   maw archive <oracle>         Graceful oracle death (soul-sync → disable → archive)
   maw find <keyword>           Search ψ/memory/ across all oracles
   maw fleet health             Fleet health: dormancy, zombies, islands
+  maw fleet doctor             Federation config doctor: collisions, orphan routes, stale peers
+  maw fleet doctor --fix       Apply safe auto-fixes (dedupe/remove self-peer/add agents)
+  maw fleet doctor --json      JSON output for CI (exit 2=error, 1=warn, 0=clean)
   maw fleet consolidate        Merge branches + push disabled oracles
   maw fleet consolidate --remove  Also delete .disabled configs after push
   maw done <window>            Auto-save (/rrr + commit + push) then clean up
@@ -69,6 +77,11 @@ export function usage() {
   maw mega status             Same — all teams with members + tasks
   maw mega stop               Kill all active team panes
   maw federation status       Peer connectivity + agent counts
+  maw federation sync         Pull live /api/identity → auto-update config.agents
+  maw federation sync --dry-run   Preview diff, no writes
+  maw federation sync --check     Exit 1 if out-of-sync (CI)
+  maw federation sync --prune     Also remove oracles no longer hosted anywhere
+  maw federation sync --force     Overwrite existing routes on conflict
   maw talk-to <agent> <msg>    Thread + hey (persistent + real-time)
   maw <agent> <msg...>        Shorthand for hey
   maw <agent>                 Shorthand for peek
@@ -100,8 +113,10 @@ export function usage() {
   maw wake neo --new free     Create worktree + wake
   maw wake neo --issue 5      Fetch issue #5 + send as claude -p prompt
   maw wake neo --issue 5 --repo org/repo   Explicit repo
-  maw wake neo --incubate org/repo         Clone via ghq + worktree
-  maw wake neo --incubate org/repo --issue 5  Incubate + issue prompt
+  maw wake org/repo                        Clone via ghq + wake (auto-detect name)
+  maw wake https://github.com/org/repo     Full GitHub URL works too
+  maw wake org/repo --issue 5              Clone + issue prompt
+  maw wake neo --incubate org/repo         Explicit incubate (legacy form)
 
 \x1b[33mPulse add:\x1b[0m
   maw pulse ls                Board table (terminal)

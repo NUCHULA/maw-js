@@ -4,6 +4,9 @@ import { MawEngine } from "./engine";
 import type { WSData } from "./types";
 import { loadConfig } from "./config";
 import { existsSync, readFileSync } from "fs";
+import { join } from "path";
+import { homedir } from "os";
+import { serveStatic } from "hono/bun";
 import { api } from "./api";
 import { feedBuffer, feedListeners } from "./api/feed";
 import { mountViews } from "./views/index";
@@ -54,6 +57,17 @@ app.get("/topology", async (c) => {
 
 mountViews(app);
 
+// Serve packed maw-ui dist (Shape A — single port, single process)
+const MAW_UI_DIR = process.env.MAW_UI_DIR || join(homedir(), ".maw", "ui", "dist");
+if (existsSync(MAW_UI_DIR)) {
+  app.use("/*", serveStatic({ root: MAW_UI_DIR }));
+} else {
+  // The Door — minimal landing page when no packed maw-ui is installed.
+  // Lets users connect to any federation by pasting an address.
+  const doorHtml = readFileSync(join(import.meta.dir, "static", "door.html"), "utf-8");
+  app.get("/", (c) => c.html(doorHtml));
+}
+
 app.onError((err, c) => c.json({ error: err.message }, 500));
 
 export { app };
@@ -96,7 +110,7 @@ export async function startServer(port = +(process.env.MAW_PORT || loadConfig().
 
   // Plugin system — built-in + user plugins
   try {
-    const { PluginSystem, loadPlugins } = require("./plugins");
+    const { PluginSystem, loadPlugins, reloadUserPlugins, watchUserPlugins } = require("./plugins");
     const { homedir } = require("os");
     const { join, resolve, dirname } = require("path");
     const plugins = new PluginSystem();
@@ -106,13 +120,25 @@ export async function startServer(port = +(process.env.MAW_PORT || loadConfig().
     await loadPlugins(plugins, builtinDir, "builtin");
 
     // User plugins (file-drop: ~/.oracle/plugins/)
-    await loadPlugins(plugins, join(homedir(), ".oracle", "plugins"), "user");
+    const userPluginsDir = join(homedir(), ".oracle", "plugins");
+    await loadPlugins(plugins, userPluginsDir, "user");
+
+    // Hot-reload: watch the user plugins dir and re-import on .ts/.js/.wasm
+    // change. Builtin plugins are not touched. Opt out with MAW_HOT_RELOAD=0.
+    watchUserPlugins(userPluginsDir, async (changedFile: string) => {
+      console.log(`[plugin] reloading user plugins (${changedFile} changed)`);
+      await reloadUserPlugins(plugins, userPluginsDir);
+    });
 
     // Single feedListener wires everything through the plugin pipeline
     feedListeners.add((event) => plugins.emit(event));
 
     // Plugin debug API + page
     app.get("/api/plugins", (c) => c.json(plugins.stats()));
+    app.post("/api/plugins/reload", async (c) => {
+      await reloadUserPlugins(plugins, userPluginsDir);
+      return c.json({ ok: true, ...plugins.stats() });
+    });
     const { pluginsView } = require("./views/plugins");
     app.route("/plugins", pluginsView(plugins));
   } catch (err) {

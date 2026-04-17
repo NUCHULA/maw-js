@@ -16,6 +16,8 @@ import { avengersApi } from "./avengers";
 import { transportApi } from "./transport";
 import { workspaceApi } from "./workspace";
 import { reportsApi } from "./reports";
+import { peerExecApi } from "./peer-exec";
+import { proxyApi } from "./proxy";
 import { federationAuth } from "../lib/federation-auth";
 
 export const api = new Hono();
@@ -40,3 +42,5 @@ api.route("/", avengersApi);
 api.route("/", transportApi);
 api.route("/", workspaceApi);
 api.route("/", reportsApi);
+api.route("/", peerExecApi);
+api.route("/", proxyApi);
