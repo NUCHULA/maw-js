@@ -323,11 +323,6 @@ function validateConfig(raw: Record<string, unknown>): Partial<MawConfig> {
     result.githubOrg = raw.githubOrg;
   }
 
-  // nanoclaw: pass through (bridge config)
-  if ("nanoclaw" in raw && raw.nanoclaw && typeof raw.nanoclaw === "object") {
-    result.nanoclaw = raw.nanoclaw;
-  }
-
   return result as Partial<MawConfig>;
 }
 
