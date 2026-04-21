@@ -19,12 +19,13 @@
 
 ## Upstream Merge PRs (additional — check when merging from Soul-Brews-Studio)
 
+- [ ] `src/views/office.ts` exists and registered in `src/views/index.ts` (ห้ามลบ — SHARED-RULES)
 - [ ] NUCHULA patches preserved:
   - [ ] `src/config.ts` — `CONFIG_DIR` customization
   - [ ] `src/deprecated.ts` — `/maw-log` endpoint
 - [ ] No breaking changes to CLI: `maw hey`, `maw wake`, `maw team`
 - [ ] Teams CRUD works: `curl -sf http://127.0.0.1:3456/api/teams`
-- [ ] Views registered in `src/views/index.ts` — no silent removal
+- [ ] Hostname bind `0.0.0.0` not changed to `127.0.0.1` (Mac accesses via LAN)
 
 ## Code Quality
 
@@ -45,17 +46,23 @@ bash /data/workspace/scripts/post-deploy-verify.sh
 
 Expected: 8/8 checks pass (systemd, port, bind, UI, assets, API sessions, API teams, LAN).
 
+## Feedback Chain (mandatory)
+
+- [ ] ถ้าติดปัญหา → แจ้ง forge ทันที (ห้ามเงียบ)
+- [ ] เสร็จงาน → แจ้งคนสั่ง + ผลอยู่ที่ไหน
+
 ## Review Flow
 
 ```
 Developer creates PR
   → audit 📋 reviews checklist
   → proof ✅ runs test suite
-  → both pass → forge 🔥 approves merge
+  → both pass → forge 🔥 approves merge (or หัวหน้าแผนก if within scope)
   → deploy + verify (post-deploy-verify.sh)
+  → แจ้งคนสั่ง (Feedback Chain)
 ```
 
 ---
 
-*Created by audit 📋 — 2026-04-11*
+*Created by audit 📋 — 2026-04-11 (v2: updated with SHARED-RULES Feedback Chain + office.ts protection)*
 *Reference: /data/workspace/SHARED-RULES.md*
