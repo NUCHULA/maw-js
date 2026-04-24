@@ -10,7 +10,10 @@
   "scripts": {
     "build": "bun build src/cli.ts --outfile dist/maw --target=bun --minify",
     "deploy": "bun run build && bun src/cli.ts fleet sync && pm2 restart maw",
-    "dev": "pm2 start ecosystem.config.cjs"
+    "dev": "pm2 start ecosystem.config.cjs",
+    "test": "bun test",
+    "test:unit": "bun test test/*.test.ts",
+    "test:integration": "MAW_REQUIRE_SERVER=1 bun test test/integration/"
   },
   "description": "maw.js — Multi-Agent Workflow in Bun/TS. Remote tmux orchestra control. CLI + Web UI.",
   "dependencies": {
