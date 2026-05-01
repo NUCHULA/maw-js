@@ -41,6 +41,26 @@ describe("validateTeamName", () => {
     expect(() => validateTeamName("my team")).toThrow("invalid team name");
     expect(() => validateTeamName("team;rm -rf")).toThrow("invalid team name");
   });
+
+  // BVA: length boundary at 100 chars
+  it("accepts exactly 100-char name (at limit)", () => {
+    const name = "a".repeat(100);
+    expect(validateTeamName(name)).toBe(name);
+  });
+
+  it("rejects 101-char name (one over limit)", () => {
+    expect(() => validateTeamName("a".repeat(101))).toThrow("team name too long");
+  });
+
+  it("accepts numeric-only name", () => {
+    expect(validateTeamName("12345")).toBe("12345");
+    expect(validateTeamName("0")).toBe("0");
+  });
+
+  it("accepts 100-char mixed valid chars (a-z, 0-9, _, - at boundary)", () => {
+    const name = "a-".repeat(50); // exactly 100 chars
+    expect(validateTeamName(name)).toBe(name);
+  });
 });
 
 describe("loadTeam", () => {
