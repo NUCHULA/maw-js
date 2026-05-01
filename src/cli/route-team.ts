@@ -31,10 +31,14 @@ export async function routeTeam(cmd: string, args: string[]): Promise<boolean> {
         await cmdTeamTaskUpdate(teamName, args[4], args[5]);
       } else if (args[3]) {
         let assign: string | undefined;
+        let criteria: string | undefined;
+        let reportTo: string | undefined;
         for (let i = 4; i < args.length; i++) {
           if (args[i] === "--assign" && args[i + 1]) { assign = args[++i]; }
+          else if (args[i] === "--criteria" && args[i + 1]) { criteria = args[++i]; }
+          else if (args[i] === "--report-to" && args[i + 1]) { reportTo = args[++i]; }
         }
-        await cmdTeamTaskAdd(teamName, args[3], { assign });
+        await cmdTeamTaskAdd(teamName, args[3], { assign, criteria, reportTo });
       } else {
         console.error("usage: maw team task <team> \"subject\" [--assign agent]");
         process.exit(1);
