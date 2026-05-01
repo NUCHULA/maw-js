@@ -42,6 +42,8 @@ interface TaskData {
   owner: string | null;
   createdAt: number;
   dispatched_by?: string | null;
+  acceptance_criteria?: string;
+  report_to?: string;
 }
 
 // --- Validation ---
@@ -163,7 +165,7 @@ export async function dispatchTask(teamName: string, task: TaskData, sender?: st
       throw new Error(`window not found for ${agent} after wake attempt`);
     }
 
-    const msg = `[task:${task.id}] ${task.subject}`;
+    const msg = `[task:${task.id}] ${task.subject}${task.acceptance_criteria ? `\nDone when: ${task.acceptance_criteria}` : ""}${task.report_to ? `\nReport to: ${task.report_to}` : ""}`;
     console.log(`\x1b[36m\u21bb\x1b[0m sending task to \x1b[33m${agent}\x1b[0m ...`);
     await sendKeys(target, msg);
 
@@ -218,7 +220,7 @@ export async function cmdTeamDelete(name: string) {
   console.log(`\x1b[32m\u2713\x1b[0m team \x1b[33m${name}\x1b[0m deleted`);
 }
 
-export async function cmdTeamTaskAdd(teamName: string, subject: string, opts: { assign?: string }) {
+export async function cmdTeamTaskAdd(teamName: string, subject: string, opts: { assign?: string; criteria?: string; reportTo?: string }) {
   const config = loadTeamConfig(teamName);
   if (!config) {
     console.error(`\x1b[31m\u2717\x1b[0m team \x1b[33m${teamName}\x1b[0m not found`);
@@ -230,6 +232,8 @@ export async function cmdTeamTaskAdd(teamName: string, subject: string, opts: { 
     status: "pending",
     owner: opts.assign || null,
     createdAt: Date.now(),
+    ...(opts.criteria ? { acceptance_criteria: opts.criteria } : {}),
+    ...(opts.reportTo ? { report_to: opts.reportTo } : {}),
   };
   saveTask(teamName, task);
   console.log(`\x1b[32m\u2713\x1b[0m task \x1b[33m${task.id}\x1b[0m added to \x1b[33m${teamName}\x1b[0m${opts.assign ? ` (assigned: ${opts.assign})` : ""}`);
